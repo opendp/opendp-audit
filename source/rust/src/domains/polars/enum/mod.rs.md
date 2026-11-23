@@ -30,7 +30,7 @@ updated: 2026-11-23
 
 **Limitations:** Not executed against native OpenDP. Empty-set behavior may produce a panic but has not been confirmed. A downstream DP privacy leak is not claimed.
 
-**Related:** [Audit defect #137](https://github.com/opendp/opendp-audit/issues/137) is separate from [#138](https://github.com/opendp/opendp-audit/issues/138) (array membership) and [#57](https://github.com/opendp/opendp-audit/issues/57) (metric-space validation).
+**Related:** [Audit defect #137](https://github.com/opendp/opendp-audit/issues/137) is separate from [#138](https://github.com/opendp/opendp-audit/issues/138) (array membership, pending upstream [PR #3242](https://github.com/opendp/opendp/pull/3242)) and [#57](https://github.com/opendp/opendp-audit/issues/57) (metric-space validation). PR #3242 touches `EnumDomain` but only validates null categories and adds dtype support; its diff leaves the faulty `member` expression unchanged.
 
 ## Next checks
 
