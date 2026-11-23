@@ -11,12 +11,12 @@ use opendp::core::{
     opendp_core__odometer_queryable_privacy_loss,
 };
 use opendp::domains::AtomDomain;
-use opendp::ffi::any::{AnyDomain, AnyMeasure, AnyMetric, AnyObject};
+use opendp::ffi::any::{AnyDomain, AnyMeasure, AnyMetric, AnyObject, AnyOdometer};
 use opendp::measures::MaxDivergence;
 use opendp::metrics::AbsoluteDistance;
 
 fn fresh_queryable() -> AnyObject {
-    let odometer = make_fully_adaptive_composition::<
+    let typed_odometer = make_fully_adaptive_composition::<
         AnyDomain,
         AnyMetric,
         AnyMeasure,
@@ -27,7 +27,10 @@ fn fresh_queryable() -> AnyObject {
         AnyMeasure::new(MaxDivergence),
         None,
     )
-    .expect("construct FFI odometer");
+    .expect("construct typed odometer");
+    // The FFI constructor erases Q = AnyMeasurement into Q = AnyObject.
+    // Without this conversion, the downcast in the FFI function fails before cloning.
+    let odometer: AnyOdometer = typed_odometer.into();
     AnyObject::new(
         odometer
             .invoke(&AnyObject::new(0_i32))
