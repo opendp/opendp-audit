@@ -14,6 +14,7 @@ At any positive rational `scale=s`, the accepted discrete-Laplace output must ha
 ## Affected symbols and source audits
 
 - [CKS20 source audit](../source/rust/src/traits/samplers/cks20/mod.rs.md), including `sample_geometric_exp_fast`, `sample_discrete_laplace` and their documented mass.
+- [Noise-family source audit](../source/rust/src/measurements/noise/mod.rs.md), including `ZExpFamily<1>` Rustdoc and its `Sample`/`MakeNoise` forwarding path; [pinned source](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/noise/mod.rs).
 - [Pinned Rust implementation](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/traits/samplers/cks20/mod.rs), [fast-geometric proof](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/traits/samplers/cks20/sample_geometric_exp_fast.tex), and [Laplace proof](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/traits/samplers/cks20/sample_discrete_laplace.tex).
 - [Native Rust statistical test oracle](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/traits/samplers/cks20/test/symmetric.rs); [independent mathematical model](../tools/tests/test_cks20_laplace_law_model.py).
 
@@ -33,6 +34,12 @@ Put `q=exp(-1/s)`. The sampler draws an independent fair sign and `Y~Geometric(1
 
 The independent model checks 68 selected signed mass values for four rational scales and verifies nonnegativity, symmetry, and normalization. Positive scales approaching zero converge to the deterministic point mass; the Rust `scale=0` branch was inspected, not executed.
 
+### Noise-family integration and repeated Rustdoc bug
+
+In the [core `ZExpFamily<P>` definition](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/noise/mod.rs), the public `P=1` PMF repeats the same negative factor `(exp(-1/s)-1)/(exp(-1/s)+1)` as the CKS20 sampler Rustdoc. The [noise-family audit](../source/rust/src/measurements/noise/mod.rs.md) traces `Sample for ZExpFamily<1>` to the correct `sample_discrete_laplace` implementation, with an arbitrary-precision additive shift. For vector inputs, generic `MakeNoise` obtains a validated privacy map before building a closure that samples each component. The [Laplace privacy-map implementation](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/noise/distribution/laplace/mod.rs) rejects negative scale, while zero scale returns a point mass with infinite privacy cost for nonzero input distances.
+
+This confirms **two documentation locations, one underlying typo**. It does not establish a defect in the true sampler distribution or vector privacy map. The independent model does not execute the `ZExpFamily` wrapper, exercise entropy independence, or check all vector-neighboring privacy inequalities.
+
 ### Rustdoc discrepancy and disposition
 
 The Rustdoc formula is `[(exp(-1/s)-1)/(exp(-1/s)+1)] exp(-|x|/s)`. Since `0<exp(-1/s)<1`, this is negative at **every positive scale**: e.g. at `s=1` it says `P[X=0]≈-0.462117`. The implementation, LaTeX proof and native test oracle all use the *positive* coefficient. The remaining documentation defect is filed as [audit #48](https://github.com/opendp/opendp-audit/issues/48), verification **Confirmed** and upstream disposition **Unreported**.
@@ -43,7 +50,7 @@ Upstream [issue #1133](https://github.com/opendp/opendp/issues/1133) and merged 
 
 ## Findings
 
-- **Confirmed low-severity documentation bug:** The displayed Laplace density is negative for all positive scales, tracked in [audit #48](https://github.com/opendp/opendp-audit/issues/48).
+- **Confirmed low-severity documentation bug:** The displayed Laplace density is negative for all positive scales in **both** `cks20::sample_discrete_laplace` and `ZExpFamily<1>` Rustdoc; both locations are tracked in the single [audit #48](https://github.com/opendp/opendp-audit/issues/48).
 - **Negative result:** No implementation or privacy defect was identified in the bounded positive-scale analytical model. This does not generalize to arbitrary-precision entropy behavior or to the discrete-Gaussian sampler.
 
 ## Unresolved questions
