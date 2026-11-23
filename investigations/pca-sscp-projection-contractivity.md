@@ -5,13 +5,13 @@ updated: 2026-11-23
 status: Partial
 ---
 
-# PCA SSCP projection contractivity and privacy calibration
+# PCA SSCP projection: documented contractivity precondition (reclassified)
 
 ## Invariant and threat model
 
-A public projection `P` used in `C \mapsto PCP^T` can preserve a nuclear norm (or a row-norm-based SSCP) sensitivity bound only when its spectral norm is at most one: `||P(C-C')P^T||_* <= ||P||_2^2 ||C-C'||_*`. On reviewed `main`, `make_np_sscp_projection` carries forward the source SSCP domain's row-norm descriptor and returns the identity stability map without checking this condition or snapshotting the supplied array. If a consumer supplies `P` with spectral norm greater than one, a downstream privacy map may understate sensitivity.
+A projection `P` used in `C \mapsto PCP^T` is nonexpansive in nuclear norm when its operator norm is at most one: `||P(C-C')P^T||_* <= ||P||_2^2 ||C-C'||_*`. The internal `make_np_sscp_projection` helper documents this **precondition** rather than dynamically checking it. On the reviewed `main`, it carries forward the SSCP domain descriptor and uses an identity stability map under this explicitly stated assumption.
 
-This is a **conditional helper misuse** finding, not evidence that the built-in PCA estimator violates DP: its built-in call path constructs `P` as an identity or the transpose of a null-space basis, which is intended to be contractive. The helper lives in an underscored Python module, and its docstring already states the norm precondition.
+**Corrected disposition:** The `P=2I` witness violates the documented precondition on an internal helper. It therefore does **not** establish a privacy bug. The built-in PCA call path constructs `P` as an identity or the transpose of a null-space basis, contractive in exact arithmetic. A separate aliasing concern existed because `P` was captured without copying, but open upstream PR #3281 already adds a defensive snapshot. There is no independently actionable privacy defect established by this investigation.
 
 ## Affected symbols and source audits
 
@@ -35,11 +35,10 @@ Equivalently, `||P||_2^2=4` amplifies the SSCP difference by four; a claim of un
 
 ## Findings
 
-[Audit candidate #110](https://github.com/opendp/opendp-audit/issues/110): unchecked contraction precondition means the transformation can understate downstream noise requirements if the helper is directly used with an expansive matrix. Verification is source-level and mathematical, with no end-to-end installed OpenDP reproduction. Status is **Partial**, pending trust-boundary clarification, package-level test, and possible correction.
+[Audit issue #110](https://github.com/opendp/opendp-audit/issues/110) is **reclassified as not a defect**: unchecked contractivity is an intentional caller obligation on this internal helper, and the `P=2I` example is out of contract. The original mutable-array capture is distinct and fixed in pending [PR #3281](https://github.com/opendp/opendp/pull/3281). The mathematical counterexample remains useful as an illustration of why the precondition matters, not evidence of unsoundness within the helper's defined contract.
 
 ## Unresolved questions
 
-- Is the internal `make_np_sscp_projection` helper intentionally allowed to rely on caller-checked preconditions, or should its `contrib` API reject expansive matrices?
-- Run native regression for `P=2I` and verify construction/claimed map on current `main`; repeat after PR #3281.
-- A safe remedy is either a certified upper bound on `||P||_2^2` in the map, or input rejection for operators exceeding one; snapshot the matrix (already proposed in #3281).
+- Verify the defensive snapshot in PR #3281 using native OpenDP execution.
+- Check whether numerical null-space construction can produce slightly expansive `P` and whether any such floating-point deviation materially affects privacy accounting. No counterexample was established.
 - Full end-to-end privacy loss and numerical SVD validation were not reviewed.
