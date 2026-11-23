@@ -27,6 +27,14 @@ def singleton_path(shift, noise):
     return vector_release[0] if vector_release else 0
 
 
+def singleton_sample(shift, sampler):
+    # The vector mechanism's fallible collection returns an error as soon
+    # as the one sampler invocation fails; no output vector is produced.
+    vector_input = [shift]
+    vector_release = [sampler(value) for value in vector_input]
+    return vector_release[0] if vector_release else 0
+
+
 def modeled_privacy_map(p, distance, scale):
     if distance < 0 or scale < 0:
         raise ValueError("invalid distance or scale")
@@ -101,7 +109,7 @@ class BigIntScalarSingletonNoiseModel(unittest.TestCase):
 
         for shift in (-100, 0, 100):
             with self.assertRaisesRegex(SampleError, "entropy unavailable"):
-                singleton_path(shift, failing_sample(shift))
+                singleton_sample(shift, failing_sample)
 
 
 if __name__ == "__main__":
