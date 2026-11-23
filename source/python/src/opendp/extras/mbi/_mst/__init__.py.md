@@ -18,7 +18,7 @@ updated: 2026-11-23
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
 | `_make_mst_scores.score_query` | correctness/cellwise-l1-objective | Audited | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Reproduced selection inversion](#reproduced-selection-inversion); [issue #117](https://github.com/opendp/opendp-audit/issues/117) |
-| `_make_mst_scores` | privacy/score-l1-sensitivity | Partial | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Sensitivity comparison](#sensitivity-comparison) |
+| `_make_mst_scores` | privacy/score-l1-sensitivity | Audited | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Numerical privacy counterexample](#numerical-privacy-counterexample); [native verification](../../../../../../../investigations/mbi-mst-score-rounding-privacy.md) and [issue #135](https://github.com/opendp/opendp-audit/issues/135). |
 | `_make_mst_select` | correctness/score-selection-propagation | Partial | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Selection path](#selection-path) |
 
 ## Analysis
@@ -53,6 +53,12 @@ The two exact marginals and both model projections have the same total count (40
 The current `stability_map` on line 333 is `max(distance[1] for distance in d_in.values())`, based on marginal **cellwise L1** distance. The induced matrix norm obeys `abs(||A||_1 - ||B||_1) <= ||A - B||_{matrix,1} <= ||A - B||_{entrywise,1}`. Thus for the finite tables under the stated input-domain assumptions, this norm substitution does **not** underestimate sensitivity; the stability map can remain conservative. This review does not establish independent correctness of `make_stable_marginals`, `TypedDictDistance`, the FFI callback, or all numerical corner cases, so status is **Partial** rather than a general privacy guarantee.
 
 The earlier [upstream #2951](https://github.com/opendp/opendp/issues/2951) concerns an L2-vs-L1 metric certificate and was closed. It is not this matrix-vs-entrywise objective error.
+
+### Numerical privacy counterexample
+
+The **real-arithmetic** induced-matrix-L1 inequality above does not certify the actual **binary64** scorer. Subtracting an extremely large but finite public synthetic projection and then applying `np.linalg.norm` can amplify a one-count change by a full representable-spacing step. For three binary columns with consistent public MBI model total about `2**55`, the two adjacent pairwise tables each differ by entrywise L1 1; the actual compiled `_make_mst_scores` returns a score vector difference `[-8,0,0]`. The map still certifies 1. The 3-candidate permute-and-flip event ratio is `exp(8/scale)` for the inferior candidate, and at `scale=4` the event log ratio is `2 > advertised epsilon 0.5`.
+
+**Native verification:** [Successful CI](https://github.com/opendp/opendp-audit/actions/runs/45254507499) tested the real OpenDP nightly `_make_mst_scores` and `_make_mst_select` with a self-consistent `mbi.MarkovRandomField`; MBI computed public projections through variable elimination from finite log-potentials. The scorer and actual selector both accepted the inputs, returned/used real scores, and certified `epsilon=0.5`. See [detailed investigation](../../../../../../../investigations/mbi-mst-score-rounding-privacy.md) and [issue #135](https://github.com/opendp/opendp-audit/issues/135). No complete `make_contingency_table` estimator/release workflow was run. This is **separate** from the matrix-vs-cellwise-L1 utility problem #117.
 
 ### Selection path
 
