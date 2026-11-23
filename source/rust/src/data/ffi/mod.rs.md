@@ -16,6 +16,8 @@ updated: 2026-11-22
 
 - **Additional audit scope:** The pointer representation of a scalar `String` returned by `opendp_data__object_as_slice::string_to_raw`, compared with R and Python readers. Its separate allocation leak is not the property assessed here.
 
+- **Additional audit scope:** Legacy `object_as_slice` handling of `Vec<String>`, including ownership of each exported C string and the pointer-array backing. It is distinct from the separately audited scalar-string pointer shape and the outer descriptor.
+
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
@@ -26,6 +28,8 @@ updated: 2026-11-22
 | `opendp_data__slice_free` | memory/ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Descriptor analysis](#opendp_data__object_as_slice-and-opendp_data__slice_free--memoryownership): frees the outer descriptor only |
 
 | `opendp_data__object_as_slice::string_to_raw` | correctness/ffi-scalar-string-layout | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Scalar String layout](#scalar-string-pointer-layout): returns a direct `char *` where both binding readers expect `char **` |
+
+| `opendp_data__object_as_slice::vec_string_to_raw` | memory/string-vector-backing-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Backing allocations](#vecstring-backing-ownership): exported CString buffers and pointer array lack a release path |
 
 ## Analysis
 
@@ -60,9 +64,21 @@ updated: 2026-11-22
 
 **Related:** [Cross-language investigation](../../../../../investigations/ffi-scalar-string-layout.md). [Upstream draft PR #3179](https://github.com/opendp/opendp/pull/3179) constructs the scalar string pointer array under `FfiSliceOwner`, but is open and unmerged at review time.
 
+### Vec<String> backing ownership
+
+**Conclusion:** The legacy `Vec<String>` return path loses ownership of the C-string payloads and the pointer-array backing. A successful conversion leaks at least one C-string allocation per string and the exported vector backing allocation. An error after one or more successful string conversions leaks those already allocated C strings before an `FfiSlice` can even be produced. This is a native-memory resource-exhaustion concern rather than a differential-privacy soundness result.
+
+**Evidence:** `vec_string_to_raw` maps each cloned `String` through `util::into_c_char_p`, which calls `CString::into_raw` ([pinned definition](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/ffi/util.rs#L476-L486)). Each pointer is stored in a `Vec<*mut c_char>`. The vector's buffer becomes `FfiSlice.ptr`, and the `Vec` value itself is passed to `util::into_raw(vec)`, which calls `Box::into_raw(Box::new(...))` ([pinned definition](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/ffi/util.rs#L458-L465)). Neither the boxed vector nor its individual C strings has a matching consumer-side destructor. `opendp_data__slice_free` calls `util::into_owned` on only the *outer* `FfiSlice`, and explicitly documents that it does not free referenced buffers. Error-path `collect::<Fallible<Vec<*mut c_char>>>()?` drops the raw-pointer vector on failure but not the previously detached `CString` allocations.
+
+**Limitations:** Static ownership proof at the pinned upstream SHA only; no R/Python runtime leak measurements, sanitizer runs, or profiler counts. The pointer-array *layout* for `Vec<String>` matches the binding readers (unlike the separately audited plain scalar `String`). This review does not audit `HashMap`, tuple, or Polars backing allocations.
+
+**Related:** [Cross-language investigation](../../../../../investigations/ffi-string-vector-backing-ownership.md); [draft PR #3179](https://github.com/opendp/opendp/pull/3179) introduces `FfiSliceOwner` with owned strings and a kept-alive pointer vector, but remains unmerged.
+
 ## Next checks
 
 - Check the eventual merged code and native regression tests for complete release of pointer-array storage under both success and error conditions.
 - Independently audit the backing-buffer lifetime of the `object_as_slice` descriptor, and verify cleanup through the R consumer after PR #3176 merges.
 
 - Follow the [Cross-language scalar string layout investigation](../../../../../investigations/ffi-scalar-string-layout.md) and run scalar `String` outputs through a compiled, sanitizer-enabled binding before marking this pointer-layout concern resolved.
+
+- Validate that the eventual merged `FfiSliceOwner` reclaims `Vec<String>` C strings and the pointer array after successful and exceptional conversions; add native-allocation regression measurements.

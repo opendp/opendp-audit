@@ -15,6 +15,8 @@ updated: 2026-11-22
 
 - **Additional audit scope:** Scalar Rust `String` output, tracing `anyobjectptr_to_sexp` through `slice_to_sexp`, `slice_to_scalar`, and `voidptr_to_sexp`, focusing on the C pointer representation consumed by `mkChar`.
 
+- **Additional audit scope:** The R `Vec<String>` result consumer: whether copying C strings into R closes Rust-owned backing allocations. This does not assess correctness of UTF-8 encoding or scalar-string pointer layout.
+
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
@@ -23,6 +25,8 @@ updated: 2026-11-22
 
 | `voidptr_to_sexp` | correctness/ffi-scalar-string-layout | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Scalar String layout](#scalar-string-pointer-layout): treats `FfiSlice.ptr` as `char **` even when Rust supplies `char *` |
 | `slice_to_scalar` | correctness/ffi-scalar-string-layout | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Scalar String layout](#scalar-string-pointer-layout): forwards the unadjusted pointer for `String` values |
+
+| `voidptr_to_sexp` | memory/string-vector-backing-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Backing allocations](#vecstring-backing-ownership): reads and copies `char **` data, but does not release Rust-owned buffers |
 
 ## Analysis
 
@@ -52,9 +56,21 @@ updated: 2026-11-22
 
 **Related:** [Cross-language investigation](../../../../investigations/ffi-scalar-string-layout.md).
 
+### Vec<String> backing ownership
+
+**Conclusion:** R's `Vec<String>` output reader copies C-string contents into R-managed strings, but it cannot reclaim the separately allocated Rust C strings or the Rust pointer array. Its already-documented failure to release the outer `FfiSlice` is a distinct leak.
+
+**Evidence:** `slice_to_sexp` delegates `Vec<String>` to `slice_to_vector`, then `slice_to_scalar`, then `voidptr_to_sexp`. That function uses `mkChar(((char **)input)[i])` for each element, copying bytes into R. The Rust producer `vec_string_to_raw` used `CString::into_raw` per string and `util::into_raw(vec)` for its pointer-array vector. No matching Rust destructor is invoked by the R `Vec<String>` read path. A [source-level test](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/R/opendp/tests/testthat/test-data.R) describes a vector-of-strings identity roundtrip; this audit did not execute it.
+
+**Limitations:** Static trace only. R's correct pointer-array interpretation does not establish allocation cleanup. Even adopting the descriptor-only cleanup from PR #3176 would not free `FfiSlice.ptr` children; the pending typed ownership redesign in [PR #3179](https://github.com/opendp/opendp/pull/3179) is relevant.
+
+**Related:** [Cross-language investigation](../../../../investigations/ffi-string-vector-backing-ownership.md).
+
 ## Next checks
 
 - After PR #3176 merges, inspect the merged SHA and test normal returns and nonlocal R error exits under a native leak checker.
 - Separately audit backing-buffer ownership (particularly `Vec<String>`, tuples, and `Vec<AnyObject>`) rather than assuming `slice_free` releases all allocations.
 
 - Follow the [Cross-language scalar string layout investigation](../../../../investigations/ffi-scalar-string-layout.md) and run scalar `String` outputs through a compiled, sanitizer-enabled binding before marking this pointer-layout concern resolved.
+
+- Validate that the eventual merged `FfiSliceOwner` reclaims `Vec<String>` C strings and the pointer array after successful and exceptional conversions; add native-allocation regression measurements.

@@ -15,6 +15,8 @@ updated: 2026-11-22
 
 - **Additional audit scope:** Scalar `String` conversion in `_slice_to_string`, compared with the Rust `string_to_raw` producer. This is separate from the existing temporary-vector lifetime review.
 
+- **Additional audit scope:** The Python `Vec<String>` result consumer: whether decoded `str` values close Rust-owned backing allocations. This is separate from the prior `Vec<AnyObject>` helper leak.
+
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
@@ -22,6 +24,8 @@ updated: 2026-11-22
 | `_slice_to_vector` | memory/temporary-slice-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Cross-file investigation](../../../../investigations/ffi-vector-slice-lifetime.md) |
 
 | `_slice_to_string` | correctness/ffi-scalar-string-layout | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Scalar String layout](#scalar-string-pointer-layout): dereferences `FfiSlice.ptr` as `char **` although the scalar Rust producer returns `char *` |
+
+| `_slice_to_vector` | memory/string-vector-backing-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Backing allocations](#vecstring-backing-ownership): decodes `Vec<String>` data but does not reclaim Rust-owned buffers |
 
 ## Analysis
 
@@ -45,8 +49,20 @@ updated: 2026-11-22
 
 **Related:** [Cross-language investigation](../../../../investigations/ffi-scalar-string-layout.md).
 
+### Vec<String> backing ownership
+
+**Conclusion:** Python's `Vec<String>` converter decodes each C string and copies it into Python-owned strings, but it never frees the independently Rust-owned C-string allocations or the Rust vector backing. The outer `c_to_py` cleanup releases the `FfiSlice` descriptor only.
+
+**Evidence:** `_slice_to_vector` casts `raw.contents.ptr` to `POINTER(c_char_p)`, obtains its elements, and returns `list(map(lambda v: v.decode(), array))`. The outer `c_to_py` finally calls `slice_free(ffi_slice)`, whose Rust implementation explicitly does not free referenced data. The producer `vec_string_to_raw` uses `CString::into_raw` for strings and `util::into_raw(vec)` for its pointer array. A conversion exception does not repair these missing deallocations.
+
+**Limitations:** Static ownership trace only; no compiled Python OpenDP test or native profiler was run. The `char **` array layout is correct for vectors, unlike the known scalar-string mismatch.
+
+**Related:** [Cross-language investigation](../../../../investigations/ffi-string-vector-backing-ownership.md); [draft PR #3179](https://github.com/opendp/opendp/pull/3179).
+
 ## Next checks
 
 Run a native conversion loop with allocation instrumentation, then verify that the eventual merged ownership implementation reclaims both the view header and pointer-array storage, including conversion errors.
 
 - Follow the [Cross-language scalar string layout investigation](../../../../investigations/ffi-scalar-string-layout.md) and run scalar `String` outputs through a compiled, sanitizer-enabled binding before marking this pointer-layout concern resolved.
+
+- Validate that the eventual merged `FfiSliceOwner` reclaims `Vec<String>` C strings and the pointer array after successful and exceptional conversions; add native-allocation regression measurements.
