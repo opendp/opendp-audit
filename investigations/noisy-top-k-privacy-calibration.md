@@ -48,6 +48,26 @@ All ordered pairs of equal-length vectors over the score alphabet `{-1,0,1}` wit
 
 This is a **finite exact-enumeration algorithm using approximate floating-point probability arithmetic**; it is not a symbolic proof, not direct OpenDP Rust execution, and not a verification of every Rényi order or parameter value. No hidden distributional test is represented as a real Rust test.
 
+
+### Extended numerical calibration model (subnormals and overflow)
+
+A deterministic Python 3 independent reference model used `fractions.Fraction.from_float` to represent each accepted binary64 input exactly. Every positive finite arithmetic step was rounded upward to the nearest representable binary64 number by comparing `Fraction.from_float(float(ideal))` with the exact rational result and applying `math.nextafter(value, math.inf)` if nearest rounding fell below the ideal. Values whose upward result could not be represented as a finite binary64 number were classified as **reference-model errors**. This models the algebraic directed-rounding contracts; it does **not** execute or test OpenDP's `FBig` backend.
+
+For each input `d >= 0`, `scale > 0`, `k >= 0`, monotonic flag, and measure, the model evaluated the same outward-rounded path as the constructor: `d` or `inf_add(d,d)`, `inf_div(d,scale)`, then (for zCDP) `inf_powi(ratio, 2)` and `inf_div(square, 8)`, followed by an upward cast of `k` and `inf_mul(result,k)`. For every successfully represented value it verified against a **separately computed exact rational bound**:
+
+- Pure DP: `k * ((monotonic ? d : 2d) / scale)`.
+- zCDP: `(k / 8) * ((monotonic ? d : 2d) / scale)^2`.
+
+The deterministic tests covered:
+
+- A **13,680-case Cartesian grid** with `d` drawn from zero and 18 positive edge values (smallest subnormal, nearby subnormals, minimum normal and adjacent values, powers of two spanning very small and very large magnitudes, `0.1`, `1`, and maximum finite binary64); `scale` from the 18 positive edge values; `k` from `{0,1,2,3,7,100,2^53-1,2^53,2^53+1,2^63-1}`; both monotonicity settings and both privacy measures. Outcomes: **10,429** representable bounds, **3,251** model arithmetic errors, **zero** representable underestimates.
+- **30,000 deterministic pseudorandom samples** using Python `random.Random(20261122)` with positive finite numbers sampled across binary exponents from `-1022` through `1023`, plus small subnormal values and selected fixed edge values; `k` from `{0,1,2,3,7,100,2^53+1,2^63-1}`; both monotonicity settings and both measures. Outcomes: **22,869** representable bounds, **7,131** model arithmetic errors, **zero** representable underestimates.
+- Within these tests, **875** random cases produced the smallest positive binary64 (`2^-1074`) via upward rounding where the exact positive ideal result lay below it. In particular, the model did not round a positive ideal privacy loss down to zero.
+
+**Combined:** **43,680** parameter combinations; **33,298** representable conservative reference-model results; **10,382** model arithmetic errors; **zero** exact-rational underestimates. The reference model's error count is **not** a claim that Rust errors identically, since it was not executed. A bounded-float backend may fail for additional cases. By contract, an error means the map cannot certify that distance, not that its privacy cost is zero or infinite.
+
+These tests do not analyze the exact distribution at extreme scales or guarantee arbitrary-precision rational conversion performance. The coverage remains **Partial** until the native backend is exercised and its directed-rounding contracts validated.
+
 ## Findings
 
 **No privacy-map or selection-distribution defect identified in the enumerated scope.** Do not generalize this negative result to arbitrary score domains, infinitesimal or extreme positive scales, all `alpha > 1`, or runtime behavior. The existing audit record for index rebasing remains separate. No candidate-defect issue was created, and no new audit-task lease was claimed.

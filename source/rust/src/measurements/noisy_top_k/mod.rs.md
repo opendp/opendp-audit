@@ -42,6 +42,10 @@ The test exercised the index bookkeeping **model**, not compiled Rust or a full 
 
 The [cross-file investigation](../../../../../investigations/noisy-top-k-privacy-calibration.md) traces both proposal modes, the sampler contract, the L-infinity-to-range sensitivity conversion, per-step privacy maps, and composition over `k` selections. An independently implemented Python probability model exhaustively compared 61,848 ordered neighboring-input cases against the pure-DP bound and 371,088 Rényi-order checks against the zCDP bound (scores in `{-1,0,1}`, vector sizes `2..4`, scales `0.5`, `1`, `2`, both signs, and `k=1..n`). None exceeded the bound by more than the declared `1e-10` tolerance. The comparison was not a native OpenDP execution and does not establish soundness for arbitrary score domains or scales; all new privacy/distribution coverage rows remain **Partial**.
 
+### Numerical edge-case model
+
+An [extended finite reference model](../../../../../investigations/noisy-top-k-privacy-calibration.md#extended-numerical-calibration-model-subnormals-and-overflow) checked the constructor's directed-rounding algebra using exact `Fraction` arithmetic and upward binary64 rounding, including subnormals, near-overflow scales, and `k > 2^53`. Of **43,680** deterministic edge/random combinations, **33,298** reference-model outputs were representable and conservative with respect to exact rational formulas, **10,382** were classified as unrepresentable model arithmetic errors, and **none** underestimated the ideal privacy bound. This validates only the independent **rounding reference model**, not OpenDP's executed `FBig` backend or runtime sampling. The privacy calibration coverage remains **Partial**.
+
 ## Next checks
 
 - Run the native Rust regression suite for this module when a runnable upstream checkout is available.
