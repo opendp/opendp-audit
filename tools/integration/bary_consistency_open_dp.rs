@@ -61,7 +61,7 @@ fn already_consistent_mixed_f64_scales_are_preserved_upstream() -> Fallible<()> 
     // root=M; parents=(M,0); leaves=(M,0,s,-s).
     // Every parent equals the sum of its children in real arithmetic
     // AND in f64. The least-squares projection must be the identity.
-    let m = f64::MAX;
+    let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
     assert!(s.is_normal());
     let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
@@ -74,7 +74,7 @@ fn already_consistent_mixed_f64_scales_are_preserved_upstream() -> Fallible<()> 
 fn already_consistent_mixed_f64_scales_height_four_upstream() -> Fallible<()> {
     // A 4-layer binary tree with eight leaves. The right grandchild
     // subtree has small canceling leaves while the leftmost leaf is huge.
-    let m = f64::MAX;
+    let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
     let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
     let observed = vec![

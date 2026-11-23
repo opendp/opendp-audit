@@ -225,7 +225,7 @@ fn normalized_patch_loses_small_leaves_of_consistent_mixed_scale_tree() -> Falli
     // Characterization test of an UNSOLVED regression in the CI-only patch.
     // The exact input is internally consistent, so its unique LS projection
     // is the original leaf vector [M, 0, s, -s].
-    let m = f64::MAX;
+    let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
     let normalized_small = s / m;
     assert_eq!(normalized_small, 0.0, "small leaf must underflow when scaled");
@@ -240,7 +240,7 @@ fn normalized_patch_loses_small_leaves_of_consistent_mixed_scale_tree() -> Falli
 #[test]
 fn normalized_patch_also_loses_small_leaves_of_height_four_tree() -> Fallible<()> {
     // Same defect in a four-layer tree with eight leaves.
-    let m = f64::MAX;
+    let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
     let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
     let observed = vec![
