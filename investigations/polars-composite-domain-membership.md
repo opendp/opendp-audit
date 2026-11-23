@@ -71,8 +71,8 @@ These are **correctness/domain-contract** defects, not demonstrated privacy-budg
 ## Findings
 
 - [#137: EnumDomain checks only the first category](https://github.com/opendp/opendp-audit/issues/137) — verification **Confirmed (source-level)**, upstream disposition **Unreported**, correctness.
-- [#138: ArrayDomain ignores nested value constraints](https://github.com/opendp/opendp-audit/issues/138) — verification **Confirmed (source-level)**, upstream disposition **Unreported**, correctness.
-- Searched open and closed upstream/audit issues and upstream PRs for corresponding constructors and membership behavior. No matching issue or pending fix was found as of the reviewed source.
+- [#138: ArrayDomain ignores nested value constraints](https://github.com/opendp/opendp-audit/issues/138) — verification **Confirmed (source-level)**, upstream disposition **Pending PR #3242**; audit issue closed under the repository's existing-fix tracking policy, while the fix is not merged into upstream `main`.
+- Searched open and closed upstream/audit issues and PRs. A later check identified [open/draft PR #3242](https://github.com/opendp/opendp/pull/3242), which adds nested dtype/null/value checks to `ArrayDomain::member`, addressing #138. Its `enum/mod.rs` changes add null-category validation and dtype support but **do not change `EnumDomain::member` or add a regression for the second declared category**; #137 remains unreported/unfixed. PR #3242 is not merged into upstream `main` as of this review.
 - Reviewed the public constructors, FFI exposure, and surrounding SeriesDomain limitations. No native OpenDP/Polars runtime test was executed.
 
 ## Unresolved questions
