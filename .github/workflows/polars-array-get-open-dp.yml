@@ -6,6 +6,7 @@ on:
       - '.github/workflows/polars-array-get-open-dp.yml'
       - 'tools/integration/polars_array_get_runtime.py'
       - 'tools/integration/polars_array_get_open_dp.rs'
+      - 'tools/integration/polars_array_get_private_release.rs'
   workflow_dispatch:
 
 permissions:
@@ -60,6 +61,8 @@ jobs:
             mkdir -p "$repo/rust/tests"
             cp tools/integration/polars_array_get_open_dp.rs "$repo/rust/tests/"
           done
+          cp tools/integration/polars_array_get_private_release.rs \
+            opendp-main/rust/tests/polars_array_get_private_release.rs
       - uses: dtolnay/rust-toolchain@stable
       - name: Verify pinned upstream accepts potentially fallible aggregate
         env:
@@ -68,6 +71,11 @@ jobs:
           cargo test --manifest-path opendp-main/rust/Cargo.toml \
             --no-default-features --features contrib,polars \
             --test polars_array_get_open_dp -- --nocapture
+      - name: Check whether private release observes index-dependent OOB errors
+        run: |
+          cargo test --manifest-path opendp-main/rust/Cargo.toml \
+            --no-default-features --features contrib,polars \
+            --test polars_array_get_private_release -- --nocapture
       - name: Verify open PR 3155 rejects potentially fallible aggregate
         env:
           EXPECT_REJECTION: '1'
