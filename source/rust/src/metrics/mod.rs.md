@@ -20,6 +20,7 @@ updated: 2026-11-22
 | `metrics::LInfDistance<Q>` | privacy/cross-length-adjacency | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Cross-metric comparison](#analysis) |
 | `metrics::LpDistance<P,Q>` | privacy/cross-length-adjacency | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Explicit infinite-distance rule](#analysis) |
 | `MetricSpace for (VectorDomain<AtomDomain<T>>, LInfDistance<T>)` | domain/size-compatibility | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Compatibility check](#analysis) |
+| `metrics::LpDistance<P,Q>` | correctness/exponent-precondition | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Zero-exponent metric-space precondition](#zero-exponent-metric-space-precondition) |
 
 ## Analysis
 
@@ -36,6 +37,12 @@ A second distinct consumer, the Polars `ExprDomain` implementation of `LInfDista
 In `noisy_top_k`, every successful output has length `min(k, input.len())`. Thus, at public `k = 2`, inputs of lengths 1 and 2 yield outputs of lengths 1 and 2 respectively, with disjoint support. If those inputs were finite-distance neighbors, no finite pure-DP or zCDP map could be valid for that pair. If they have infinite metric distance, the output-length behavior is compatible with the privacy claim and no defect follows. The independent Python 3 source-semantics model checked all 320 combinations of `n=0..7`, `k=0..9`, and both boolean selection flags; cardinalities matched the formula. It did **not** execute Rust.
 
 **Conclusion:** The retrieved proof definition is insufficient to decide cross-length closeness for `LInfDistance`. The strongest defensible reading is an open **contract/documentation question**, with a plausible fixed-dimension interpretation supported by `LpDistance` precedent and the fixed-width Polars use case. This is **not** a confirmed privacy defect; do not open a bug issue based solely on variable-length output.
+
+### Zero-exponent metric-space precondition
+
+The public `LpDistance<const P: usize, Q>` type implements `Metric` for all `usize` exponents. Its `MetricSpace` implementation for `VectorDomain<AtomDomain<T>>` rejects NaN-permitting element domains but does **not** reject `P=0`. The documented norm `(sum |x_i-x'_i|^P)^(1/P)` is undefined at `P=0`, so the accepted metric lacks the described semantics. In particular, the [public singleton transformation `make_vec`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/transformations/scalar_to_vector/mod.rs) inherits this gap through its identity stability map. Under a hypothetical conventional L0 interpretation, the singleton pair `0, 0.5` has output L0 distance 1 while the map returns 0.5; this countermodel is **conditional** because OpenDP does not specify L0 semantics for this type.
+
+This is tracked as [audit candidate #37](https://github.com/opendp/opendp-audit/issues/37), with [source coverage](../../../../source/rust/src/transformations/scalar_to_vector/mod.rs.md) and a [cross-file investigation](../../../../investigations/scalar-to-vector-zero-lp-exponent.md). A finite Python reference model checked positive exponents and the conditional L0 case; no compiled Rust or privacy release was run. **Status `Partial`** pending confirmation of supported exponents and a native constructor regression.
 
 ## Next checks
 
