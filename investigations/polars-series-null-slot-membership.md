@@ -12,6 +12,7 @@ status: Partial
 - OpenDP: [`ef1a238634d6196b01a1a1e77d3d5ad2340e3094`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/domains/polars/series/mod.rs).
 - Its pinned Polars dependency: `py-1.36.1`, [`PrimitiveArray::values_iter`](https://github.com/pola-rs/polars/blob/py-1.36.1/crates/polars-arrow/src/array/primitive/mod.rs).
 - Audit coordination: [#83](https://github.com/opendp/opendp-audit/issues/83).
+- Permanent defect: [#87](https://github.com/opendp/opendp-audit/issues/87) (correctness; pinned native regression pending).
 - Runnable native OpenDP regression: [`tools/integration/polars_series_member_null_backing.rs`](../tools/integration/polars_series_member_null_backing.rs), launched by [`polars-series-member-null.yml`](../.github/workflows/polars-series-member-null.yml).
 - Pure logical-reference model: [`tools/tests/test_polars_series_member_null_validity_model.py`](../tools/tests/test_polars_series_member_null_validity_model.py).
 
