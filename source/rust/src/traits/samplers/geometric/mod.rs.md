@@ -37,6 +37,8 @@ For `T = i8`, `lower = -128` and `upper = 0`, the intended trial count is `0 - (
 
 The early scale-zero and equal-bound branches skip this calculation. This is **not** a privacy underestimation: the observed defect is an unnecessarily unusable supported interval. The [related measurement constructor audit](../../../../../../source/rust/src/measurements/noise/distribution/geometric/mod.rs.md) traces the error through the public bounded API.
 
+The [standalone Rust checked-subtraction regression](../../../../../../tools/tests/geometric_trial_width.rs) compiled and ran in [audit CI #45098886613](https://github.com/opendp/opendp-audit/actions/runs/45098886613): **4 tests passed**, verifying the failing and working interval cases in native Rust. This harness models the arithmetic primitives without importing the OpenDP library; a native OpenDP invocation test is still outstanding.
+
 ### Distributional cross-check within small widths
 
 The finite geometric sampler runs `trials + 1` Bernoulli attempts. On a width-`w` interval, the intended number is `w`, so the censored unilateral step count has probabilities `p (1-p)^r` for each `0 <= r < w` and tail probability `(1-p)^w` at step `w`. The outer sampler chooses a fair sign, rejects exactly one signed-zero proposal, and clamps the output.
@@ -45,6 +47,6 @@ An independent Python 3 `fractions.Fraction` probability model enumerated both s
 
 ## Next checks
 
-- Add a native Rust regression for bounded positive-scale `i8` with bounds `(-128,0)` and `(-128,127)`. Verify that construction succeeds but invocation currently reports `Overflow`, then verify the widened-arithmetic fix.
+- Add a **compiled OpenDP integration test** for bounded positive-scale `i8` with bounds `(-128,0)` and `(-128,127)`, verifying construction and the existing invocation `Overflow`; the standalone `rustc` arithmetic reproducer now passes in CI but does not exercise OpenDP. Verify the integration behavior after widening arithmetic upstream.
 - Ensure any fix calculates width and `width-1` safely before converting to `usize`, while preserving overflow rejection for widths genuinely larger than `usize`.
 - Separately test constant-time behavior and the actual floating-point Bernoulli implementation; the 504 exact-rational PMF comparisons are not Rust or timing tests.

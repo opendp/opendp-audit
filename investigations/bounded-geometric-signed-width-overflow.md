@@ -11,7 +11,7 @@ status: Partial
 
 The non-deprecated bounded `make_geometric` mechanism should support a signed integer interval when `upper - lower - 1` is nonnegative and representable as a `usize` trial count, subject to explicit resource limits. A computation that overflows a narrower temporary `T` even though the trial count fits `usize` is an avoidable **functional availability defect**, not a privacy breach. The scoped threat is valid positive-scale calls to the public bounded constructor followed by scalar or nonempty vector invocation.
 
-**Issue state:** **Confirmed by pinned-source control flow and exact integer arithmetic**, but **not executed in native Rust**. The investigation remains `Partial` because a compiled regression and implementation fix are missing.
+**Issue state:** **Confirmed by pinned-source control flow and exact integer arithmetic**, strengthened by a **compiled standalone native Rust arithmetic reproducer** (four tests passed in audit CI). The full OpenDP Rust measurement has **not** been compiled or invoked for this reproduction. The investigation remains `Partial` pending that integration test and an upstream fix.
 
 ## Affected symbols and source audits
 
@@ -40,6 +40,12 @@ The independent Python 3 check of the exact integer ranges demonstrated:
 
 For each overflowing example, the exact trial count fits `usize` on both 32-bit and 64-bit platforms. The error stems from the order and width of intermediate arithmetic, not an inability to allocate the count type. This is conclusive for the source's arithmetic path; **OpenDP Rust itself was not run**.
 
+### Compiled standalone Rust arithmetic reproduction
+
+The audit repository now contains a dependency-free [Rust test harness](../tools/tests/geometric_trial_width.rs), executed by its GitHub Actions workflow at [run #45098886613](https://github.com/opendp/opendp-audit/actions/runs/45098886613) (commit [`458218e`](https://github.com/opendp/opendp-audit/commit/458218e348d6bf64b9e1f85f2f004d5e9b4c43f8)). The workflow compiled the harness with `rustc --edition=2021 --test` and reported **four tests passed, zero failed**, alongside passing Python tests and Markdown validation.
+
+The harness reproduces the relevant **native Rust `checked_sub` primitives** used by OpenDP's `AlertingSub` implementation, confirms the failing signed `i8`, `i16`, and `i32` intervals, verifies the unsigned `u8` control case, and checks exact trial counts using a widened `i128` oracle. It does **not** import or invoke OpenDP's `sample_discrete_laplace_linear` or `make_geometric`; consequently, this is native Rust arithmetic evidence rather than a native OpenDP integration regression. The pinned OpenDP implementation is still required to establish its full runtime and constructor behavior experimentally.
+
 ### Bounded-noise distribution sanity check
 
 An independent Python 3 `fractions.Fraction` model reconstructed the sampler's two signed proposals, `trials+1` Bernoulli draws, the single signed-zero rejection, conditioning on acceptance, type-bound saturation, and final application-bound clamping. For both `u8` and `i8` machine ranges, six small intervals for each type, six probabilities `p ∈ {1/16,1/4,1/2,3/4,15/16,1}`, and seven representative inputs per interval, it compared **504** full output PMFs to the exact clamped discrete Laplace law with `a=1-p`. All **504** matched at every output atom using rational arithmetic. It is evidence that the bounded proposal scheme is consistent on these small widths, not proof of actual floating-point Bernoulli correctness, constant-time execution, or broad distribution soundness. The native Rust tests were not run.
@@ -56,6 +62,6 @@ A search of both audit and upstream issues, and upstream PRs for signed geometri
 
 ## Unresolved questions
 
-- Compile a native Rust regression demonstrating successful construction and invocation failure for `i8` `(-128,0)`, and verify the repaired implementation after widening trial-count arithmetic.
+- Run a **compiled OpenDP integration regression** for successful bounded `make_geometric` construction and invocation failure at `i8` bounds `(-128,0)`; the existing standalone compiled Rust test covers only the checked-arithmetic primitive. After widening trial-count arithmetic upstream, require the integration test to pass.
 - Decide whether and how to reject genuinely unaffordable or non-`usize`-representable widths in the constructor rather than delaying errors to invocation.
 - Separately test the actual constant-time and directed-floating-point Bernoulli implementations, including extreme scales.

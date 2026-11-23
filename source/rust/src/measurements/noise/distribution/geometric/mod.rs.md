@@ -29,12 +29,12 @@ For `T = i8`, `bounds = (-128, 0)` and `scale = 1.0`, the distribution/privacy-m
 
 For `scale == 0` or `lower == upper` the sampler bypasses this path; those cases do not reproduce the overflow. With positive scale and smaller signed intervals whose width fits `T` (for example `i8` `(-128,-1)`), the intermediate subtraction does not fail.
 
-**Disposition:** Confirmed functional availability defect, tracked by [audit issue #4](https://github.com/opendp/opendp-audit/issues/4). It is **not** a demonstrated DP privacy-accounting violation. Source-level control flow and exact integer arithmetic establish the failure; native Rust execution was unavailable in this audit.
+**Disposition:** Confirmed functional availability defect, tracked by [audit issue #4](https://github.com/opendp/opendp-audit/issues/4). It is **not** a demonstrated DP privacy-accounting violation. Source-level control flow and exact integer arithmetic establish the failure. A [standalone compiled Rust arithmetic test](../../../../../../../tools/tests/geometric_trial_width.rs) passed all four cases in [audit CI #45098886613](https://github.com/opendp/opendp-audit/actions/runs/45098886613), but the full OpenDP library and measurement were not executed.
 
 The bounded constructor computes a conservative success probability `p = 1 - exp(-1/scale)` with directed rounding, and passes a rational `ZExpFamily<1>` scale to its privacy map. The probability-to-privacy calibration is not exhaustively verified here and remains `Partial`.
 
 ## Next checks
 
-- Execute a native Rust regression for scalar and nonempty vector `i8` bounded to `(-128,0)` at scale `1.0`; expect successful construction and current invocation overflow.
+- Execute a **native OpenDP integration regression** for scalar and nonempty vector `i8` bounded to `(-128,0)` at scale `1.0`; expect successful construction and current invocation overflow. The audit's standalone native Rust test validates only the checked-subtraction arithmetic.
 - Fix the sampler's trial count arithmetic in a wider integer type, then verify the fixed-size interval law and zero/degenerate-scale paths.
 - Audit extreme-scale directed probability rounding and privacy maps independently; this report establishes a functional overflow, not a privacy failure.
