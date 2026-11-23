@@ -51,6 +51,16 @@ The code uses inverses of summed child variance, and a top-down correction distr
 
 **Conclusion:** No additional padding or shape defect established in the checked controls; **Partial** because the full input-shape and numeric boundary space was not verified.
 
+### Experimental widened-intermediate correction
+
+A **temporary CI-only patch**, stored in [`tools/integration/patch_bary_consistency_wide.py`](https://github.com/opendp/opendp-audit/blob/main/tools/integration/patch_bary_consistency_wide.py), changes the checked-out, pinned upstream source to accumulate consistency-tree node values and variances in `f64`, converts the resulting leaf estimates back to the requested `TOA` with `RoundCast`, and rejects nonfinite leaf outputs. The original input-to-`TOA` conversion is preserved; this is an experimental remedy, **not** a committed upstream OpenDP change.
+
+The [CI-only patched integration test](https://github.com/opendp/opendp-audit/blob/main/tools/integration/bary_consistency_wide_open_dp.rs) verified four direct OpenDP cases: `i128::MAX` yields **finite `f32` leaves** with relative error below `2e-7` compared with the exact real-arithmetic two-child reference; complete small-count trees are unchanged; several incomplete-tree configurations yield finite leaves and the expected lengths; and extreme `i128` with `f64` outputs remains finite and agrees with the reference to `2e-15`. The same workflow first ran the **three original baseline integration tests** to confirm the NaN defect remains reproducible without the patch.
+
+**Execution result:** All seven native OpenDP integration tests passed in [workflow #45102495396](https://github.com/opendp/opendp-audit/actions/runs/45102495396) at pinned upstream `ef1a238634d6196b01a1a1e77d3d5ad2340e3094`. The initial patch experiment failed to compile due to an ambiguous `.sum()` type inference; adding an explicit `f64` sum annotation resolved that, and the rerun compiled and passed. The temporary fix exists only in the GitHub Actions checkout and is not proposed or merged into upstream.
+
+**Unverified:** The algorithm still casts each original integer into `TOA` *before* promoting it to `f64`; e.g. an `u128::MAX` input destined for `f32` may overflow at this initial cast, so this remedy does not certify all finite-integer cases. Other floating-point types, cancellation, tree depth, exact consistency after rounding, and the full public generic contract have not been exhaustively verified. The issue remains open until upstream provides and verifies a production correction.
+
 ## Findings
 
 **[Issue #33](https://github.com/opendp/opendp-audit/issues/33):** Finite `i128` inputs can produce NaN `f32` leaves through intermediate arithmetic overflow. Verification: **Reproduced**, via the native OpenDP library integration test at the pinned commit ([CI run #45101194889](https://github.com/opendp/opendp-audit/actions/runs/45101194889)) and independent Python/standalone Rust arithmetic models. **Upstream disposition: Unreported**; searches found no matching upstream issue or corrective PR. Earlier [PR #3068](https://github.com/opendp/opendp/pull/3068) fixed a different *tree-construction* issue.
@@ -59,4 +69,4 @@ The code uses inverses of summed child variance, and a top-down correction distr
 
 - Add and test a correction to the production postprocessor that either avoids intermediate overflow or returns an explicit error for nonfinite results; update the native integration regression to assert finite leaves where mathematically representable.
 - Test equivalent `f64` numeric boundaries, incomplete trees with absent children, and exceptional conversions, ideally with property-based checks of reconciled parent/child consistency.
-- Review whether intermediate rescaling, wider internal arithmetic, or overflow detection best preserves utility without changing the deterministic postprocessing privacy guarantee.
+- Evaluate a production-safe version of the CI-tested `f64`-intermediate approach, including direct input-to-`f64` casting where appropriate; check the `u128::MAX` to `f32` case, output overflow rejection, cancellation, and all supported `TIA/TOA` combinations before proposing upstream changes.
