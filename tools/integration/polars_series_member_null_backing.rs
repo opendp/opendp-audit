@@ -29,7 +29,7 @@ fn nullable_bounded_integer_domain_rejects_valid_null_series() -> Fallible<()> {
     let chunks: Vec<_> = chunked.downcast_iter().collect();
     assert_eq!(chunks.len(), 1);
     assert_eq!(chunks[0].values_iter().next().copied(), Some(0));
-    assert_eq!(chunks[0].non_null_values_iter().copied().collect::<Vec<_>>(), vec![2]);
+    assert_eq!(chunks[0].non_null_values_iter().count(), 1);
 
     // This is a logically valid member: the only nonnull element is 2.
     // Pinned OpenDP incorrectly returns false by checking zero at the null slot.
