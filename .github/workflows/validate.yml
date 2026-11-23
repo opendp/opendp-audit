@@ -25,4 +25,8 @@ jobs:
         run: |
           rustc --edition=2021 --test tools/tests/bary_consistency_float_overflow.rs -o "$RUNNER_TEMP/bary_consistency_float_overflow"
           "$RUNNER_TEMP/bary_consistency_float_overflow"
+      - name: Check float threshold post-rounding alias in native Rust
+        run: |
+          rustc --edition=2021 --test tools/tests/float_threshold_postrounding.rs -o "$RUNNER_TEMP/float_threshold_postrounding"
+          "$RUNNER_TEMP/float_threshold_postrounding"
       - run: python tools/validate.py
