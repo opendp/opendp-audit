@@ -1,0 +1,69 @@
+name: Verify metric-cast overflow in pinned OpenDP
+
+on:
+  push:
+    paths:
+      - '.github/workflows/metric-unbounded-opendp.yml'
+      - 'tools/integration/metric_unbounded_open_dp.rs'
+      - 'tools/integration/metric_unbounded_repaired_open_dp.rs'
+      - 'tools/integration/patch_metric_unbounded_checked.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [debug, release]
+    steps:
+      - name: Checkout audit test
+        uses: actions/checkout@v4
+      - name: Checkout pinned upstream OpenDP
+        uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
+          path: opendp-upstream
+          persist-credentials: false
+      - name: Verify pinned SHA and install actual OpenDP regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C opendp-upstream rev-parse HEAD)" = "ef1a238634d6196b01a1a1e77d3d5ad2340e3094"
+          mkdir -p opendp-upstream/rust/tests
+          cp tools/integration/metric_unbounded_open_dp.rs opendp-upstream/rust/tests/
+      - name: Configure Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Verify original OpenDP bug in ${{ matrix.profile }} mode
+        shell: bash
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ "$PROFILE" = "release" ]; then flags+=(--release); fi
+          cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
+            --no-default-features --features contrib "${flags[@]}" \
+            --test metric_unbounded_open_dp -- --nocapture
+      - name: Apply experimental repair only to ephemeral CI checkout
+        run: |
+          python tools/integration/patch_metric_unbounded_checked.py \
+            opendp-upstream/rust/src/transformations/cast_metric/mod.rs
+          cp tools/integration/metric_unbounded_repaired_open_dp.rs \
+            opendp-upstream/rust/tests/
+      - name: Verify checked map in ${{ matrix.profile }} mode
+        shell: bash
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ "$PROFILE" = "release" ]; then flags+=(--release); fi
+          cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
+            --no-default-features --features contrib "${flags[@]}" \
+            --test metric_unbounded_repaired_open_dp -- --nocapture
