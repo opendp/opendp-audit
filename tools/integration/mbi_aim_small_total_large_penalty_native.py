@@ -18,7 +18,7 @@ from opendp.extras.mbi._aim import _make_aim_scores, _make_aim_select
 from opendp.extras.mbi._utilities import typed_dict_domain, typed_dict_distance, make_noise_marginal
 
 PENALTY = float(2**54 + 8)
-NUM_CATEGORIES = 65
+NUM_CATEGORIES = 65  # pushes the penalty into a 4-ULP bin while noise scale stays < 2**49
 MEASURE_SPLIT = NUM_CATEGORIES / PENALTY
 CLIQUE_A = ("A",)
 CLIQUE_B = ("B",)
@@ -185,7 +185,4 @@ if __name__ == "__main__":
     dp.enable_features("contrib", "idealized-numerics", "honest-but-curious")
     table = public_table()
     analytic_event_ratio(table)
-    try:
-        release_both(table)
-    except Exception as err:
-        print("HIGH_LEVEL_RELEASE_UNAVAILABLE", type(err).__name__, str(err)[:1200], flush=True)
+    release_both(table)
