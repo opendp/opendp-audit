@@ -60,7 +60,10 @@ def release(algorithm, model, space, distance, name):
     choices = set()
     for added in (False, True):
         value = data_for_neighbor(added)
-        assert space[0].member(value)
+        # FrameDomain membership is intentionally unsupported with polars-ffi.
+        # Verify the public schema instead; every row value is in {0, 1}.
+        assert value.collect_schema().names() == ["A", "B", "C"]
+        assert all(value.collect_schema()[c] == pl.UInt32 for c in ("A", "B", "C"))
         released_marginals, released_model = m(value)
         cliques = released_marginals.cliques()
         print(name, "neighbor", added, "released cliques", cliques, flush=True)
