@@ -8,7 +8,7 @@ updated: 2026-11-23
 
 ## Scope and assumptions
 
-- **Scope:** Score evaluation in `score_candidates`, its advertised postcondition, and the `LInfDistance` stability bound returned by `score_candidates_map`. Follow the caller through `make_quantile_score_candidates` and `make_private_quantile` only as necessary to understand how the sensitivity bound is used.
+- **Scope:** Score evaluation in `score_candidates`, its advertised postcondition, the `LInfDistance` stability bound returned by `score_candidates_map`, and the separate total-order precondition checked by `check_candidates`. Follow the public constructor and non-deprecated Polars discrete scorer only where needed for reachability.
 - **Invariant:** For non-NaN ordered data, strictly ascending candidates, `0 <= alpha_num <= alpha_den`, positive `alpha_den`, and a safe count cap `l`, each score equals `abs((alpha_den - alpha_num) * min(count_lt, l) - alpha_num * min(count_gt, l))`. For two datasets at multiset symmetric distance `d`, every candidate score differs by at most `d * max(alpha_num, alpha_den - alpha_num)`. For datasets of the same fixed size, the bound tightens to `(d // 2) * alpha_den`.
 - **Assumptions:** Valid integer scoring constants are produced by `score_candidates_constants`; integer multiplication and histogram counts remain within `u64`; candidate and input ordering is total and comparisons are consistent. In the fixed-size case the input datasets have equal lengths and the `SymmetricDistance` or `InsertDeleteDistance` is at least their multiset difference.
 - **Pinned upstream:** [Rust scorer and map](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/transformations/quantile_score_candidates/mod.rs), [score postcondition proof](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/transformations/quantile_score_candidates/score_candidates.tex), [map proof](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/transformations/quantile_score_candidates/score_candidates_map.tex), and [private quantile caller](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/private_quantile/mod.rs).
@@ -19,6 +19,7 @@ updated: 2026-11-23
 | --- | --- | --- | --- | --- |
 | `score_candidates` | correctness/rank-score | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Score evaluation and proof mismatch](#score-evaluation-and-proof-mismatch) |
 | `score_candidates_map` | privacy/stability-bound | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Stability assessment](#stability-assessment) |
+| `check_candidates` | correctness/candidate-total-order | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Singleton NaN witness](../../../../../investigations/quantile-candidate-singleton-nan.md); [issue #45](https://github.com/opendp/opendp-audit/issues/45) |
 
 ## Analysis
 
@@ -37,6 +38,14 @@ For one inserted or deleted record, the true `lt` or `gt` count for a fixed cand
 The finite model exhaustively compares **24,000 ordered dataset pairs** (40 by 40 datasets, five alpha fractions, three caps). The score difference for all three candidates stays within the unsized bound, and all equal-size pairs meet the tighter bound. `make_quantile_score_candidates` constructs these maps, and `make_private_quantile` feeds the score vector into `make_noisy_max` with `negate=true` to prefer smaller rank distances.
 
 **Status `Partial`:** This finite check and elementary bound argument do not independently verify the full upstream numeric-contract proof for every possible `u64` count, all supported atomic types, or downstream noisy-selection arithmetic. No counterexample to the implementation's stability map was identified in the reviewed model. The incorrect proof postcondition should be repaired independently of any claim of a privacy defect.
+
+### Candidate total-order validation
+
+**Finding:** `check_candidates` validates nonemptiness, then checks only `candidates.windows(2)`. A one-element floating-point `NaN` set has zero length-2 windows, so the helper returns `Ok(())` even though that candidate is not totally ordered. This contradicts the stated postcondition and its proof theorem. The public `make_quantile_score_candidates` and the non-deprecated Polars `make_expr_discrete_quantile_score` path both call the validator; the Polars path also checks nullity separately, but `NaN` is not a null. The shared helper's gap is a **low-severity candidate validation/proof-contract issue**, not a demonstrated privacy-bound underestimate. [Upstream PR #3243](https://github.com/opendp/opendp/pull/3243) is open and unmerged; its patch fixes this exact singleton-NaN gap, so the upstream disposition is **Pending PR**.
+
+**Executed evidence:** The standard-library [source-model regression](../../../../../tools/tests/test_quantile_candidate_singleton_nan.py) checks the singleton witness, ordinary valid/invalid cases, and 10,000 deterministic float candidate sequences. Only singleton `NaN` disagreed with a reference nonempty/strictly ascending/total-order contract in this finite model. The test is **not compiled OpenDP Rust or Polars**. See the [cross-file investigation](../../../../../investigations/quantile-candidate-singleton-nan.md) and [audit issue #45](https://github.com/opendp/opendp-audit/issues/45), closed after the pending fix PR was identified.
+
+**Limitations:** End-to-end `dp_quantile` runtime behavior for an all-NaN public candidate set was not tested. The broader Polars pipeline is reserved under [audit task #42](https://github.com/opendp/opendp-audit/issues/42). This row is `Audited` only for the shared validator's total-order contract; it does not certify other paths.
 
 ## Next checks
 
