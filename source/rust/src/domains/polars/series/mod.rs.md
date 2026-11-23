@@ -49,6 +49,8 @@ A [native pinned OpenDP integration regression](https://github.com/opendp/opendp
 
 `FrameDomain::member` delegates to `SeriesDomain::member` on each column, so this false-negative behavior can propagate to whole-frame domain membership. It violates the advertised domain-membership semantics and can reject valid inputs or produced outputs in code paths that perform a membership check. It does **not** by itself show a private-data-dependent release, a budget undercount, or violation of an output-distance bound. Such privacy consequences were not reproduced; the claim is **correctness**, with privacy impact **unconfirmed**.
 
+[Permanent defect issue #87](https://github.com/opendp/opendp-audit/issues/87) tracks this confirmed source/API mismatch. No corresponding upstream fix issue or pull request was identified in the deduplication search.
+
 A repair would change the per-chunk iteration to `arr.non_null_values_iter()` (or an equivalent validity-filtered iterator), preserve the nonnullable null-count guard, and add tests for bounded optional integers and floats with null payloads outside the declared bounds. No upstream code was modified in this audit.
 
 ## Next checks
