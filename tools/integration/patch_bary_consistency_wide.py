@@ -1,4 +1,4 @@
-"""Experimentally widen b-ary consistency intermediate arithmetic to f64.
+"""Experimentally widen b-ary consistency input and intermediate arithmetic to f64.
 
 Applies only to a checkout of the pinned upstream OpenDP revision in CI.
 Never commits changes to opendp/opendp. Every substitution is fail-closed.
@@ -23,10 +23,12 @@ def main():
     original = path.read_text()
     source = original
 
+    # Direct input-to-f64 casting avoids the original range loss from
+    # first casting u128::MAX to f32 (which produces infinity).
     source = replace_exact(
         source,
-        "use opendp_derive::bootstrap;",
-        "use num::ToPrimitive;\nuse opendp_derive::bootstrap;",
+        "    TOA: Float + RoundCast<TIA>,\n{",
+        "    TOA: Float + RoundCast<TIA>,\n    f64: RoundCast<TIA>,\n{",
     )
     source = replace_exact(
         source,
@@ -44,12 +46,7 @@ def main():
         """let mut tree: Vec<f64> = arg
             .iter()
             .cloned()
-            .map(|v| {
-                let rounded = TOA::round_cast(v)?;
-                rounded
-                    .to_f64()
-                    .ok_or_else(|| err!(FailedFunction, "cannot widen input to f64"))
-            })
+            .map(f64::round_cast)
             .chain((0..zero_leaves).map(|_| Ok(0.0_f64)))
             .collect::<Fallible<_>>()?;""",
     )
@@ -106,7 +103,7 @@ def main():
     if source == original:
         raise RuntimeError("Patch made no changes")
     path.write_text(source)
-    print("Applied experimental wide-intermediate fix to local CI checkout")
+    print("Applied experimental direct-input f64 fix to local CI checkout")
 
 
 if __name__ == "__main__":

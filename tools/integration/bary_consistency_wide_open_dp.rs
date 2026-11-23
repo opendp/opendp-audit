@@ -61,3 +61,44 @@ fn patched_f64_output_has_finite_extreme_i128_leaves() -> Fallible<()> {
     }
     Ok(())
 }
+
+#[test]
+fn patched_u128_max_direct_to_f64_avoids_initial_f32_infinity() -> Fallible<()> {
+    // u128::MAX cannot round to finite f32, but 2*M/3 can.
+    let max = u128::MAX;
+    assert!(!(max as f32).is_finite());
+    let expected = (max as f64) * (2.0 / 3.0);
+    assert!((expected as f32).is_finite());
+
+    let post = make_consistent_b_ary_tree::<u128, f32>(2)?;
+    let leaves = post.eval(&vec![max; 3])?;
+    assert_eq!(leaves.len(), 2);
+    assert!(leaves.iter().all(|v| v.is_finite()), "{leaves:?}");
+    for leaf in leaves {
+        let relative_error = ((leaf as f64) - expected).abs() / expected;
+        assert!(relative_error < 2e-7, "{leaf} relative_error={relative_error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn patched_output_cast_reports_unrepresentable_f32_leaf() -> Fallible<()> {
+    // A one-node tree returns the original single leaf. It does not fit in
+    // finite f32, so the postprocessor must return Err, not Ok([infinity]).
+    let post = make_consistent_b_ary_tree::<u128, f32>(2)?;
+    assert!(post.eval(&vec![u128::MAX]).is_err());
+    Ok(())
+}
+
+#[test]
+fn patched_signed_i128_min_and_single_leaf_remain_finite() -> Fallible<()> {
+    let post = make_consistent_b_ary_tree::<i128, f32>(2)?;
+    let values = post.eval(&vec![i128::MIN; 3])?;
+    assert_eq!(values.len(), 2);
+    assert!(values.iter().all(|v| v.is_finite()), "{values:?}");
+    let reference = (i128::MIN as f64) * (2.0 / 3.0);
+    assert!((values[0] as f64 - reference).abs() / reference.abs() < 2e-7);
+
+    assert_eq!(post.eval(&vec![0])?, vec![0.0]);
+    Ok(())
+}
