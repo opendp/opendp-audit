@@ -1,4 +1,4 @@
-"""Experimentally normalize large b-ary values in f64 to avoid intermediate overflow.
+"""Experimentally normalize large b-ary values in f64 with fail-closed input checks.
 
 Applies only to a checkout of the pinned upstream OpenDP revision in CI.
 Never commits changes to opendp/opendp. Every substitution is fail-closed.
@@ -68,7 +68,20 @@ def main():
             1.0_f64
         };
         if scale != 1.0 {
-            tree.iter_mut().for_each(|v| *v /= scale);
+            // Fail closed instead of silently discarding smaller, finite
+            // measurements. Roundtrip equality is only a local input
+            // preservation check, NOT a full numerical error bound.
+            for v in &mut tree {
+                let original = *v;
+                let normalized = original / scale;
+                if normalized * scale != original {
+                    return fallible!(
+                        FailedFunction,
+                        "normalization would lose input precision"
+                    );
+                }
+                *v = normalized;
+            }
         }
 
         // zero out all zero variance zero nodes on the tree""",
@@ -126,7 +139,7 @@ def main():
     if source == original:
         raise RuntimeError("Patch made no changes")
     path.write_text(source)
-    print("Applied experimental normalized-f64 fix to local CI checkout")
+    print("Applied experimental guarded normalized-f64 fix to local CI checkout")
 
 
 if __name__ == "__main__":

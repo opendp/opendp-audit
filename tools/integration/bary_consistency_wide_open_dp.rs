@@ -221,25 +221,20 @@ fn patched_200_complete_tree_inputs_match_independent_least_squares() -> Fallibl
 }
 
 #[test]
-fn normalized_patch_loses_small_leaves_of_consistent_mixed_scale_tree() -> Fallible<()> {
-    // Characterization test of an UNSOLVED regression in the CI-only patch.
-    // The exact input is internally consistent, so its unique LS projection
-    // is the original leaf vector [M, 0, s, -s].
+fn guarded_patch_rejects_underflow_of_consistent_mixed_scale_tree() -> Fallible<()> {
+    // This input is internally consistent, but normalizing by M would
+    // silently discard the two nonzero small leaves. Until a genuinely
+    // multiscale algorithm is available, return Err rather than fake zeros.
     let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
-    let normalized_small = s / m;
-    assert_eq!(normalized_small, 0.0, "small leaf must underflow when scaled");
+    assert_eq!(s / m, 0.0);
     let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
-    let leaves = post.eval(&vec![m, m, 0.0, m, 0.0, s, -s])?;
-    assert_eq!(leaves.len(), 4);
-    assert_eq!(leaves, vec![m, 0.0, 0.0, 0.0]);
-    assert_ne!(leaves, vec![m, 0.0, s, -s]);
+    assert!(post.eval(&vec![m, m, 0.0, m, 0.0, s, -s]).is_err());
     Ok(())
 }
 
 #[test]
-fn normalized_patch_also_loses_small_leaves_of_height_four_tree() -> Fallible<()> {
-    // Same defect in a four-layer tree with eight leaves.
+fn guarded_patch_rejects_underflow_in_four_layer_tree() -> Fallible<()> {
     let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
     let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
@@ -247,8 +242,21 @@ fn normalized_patch_also_loses_small_leaves_of_height_four_tree() -> Fallible<()
         m, m, 0.0, m, 0.0, 0.0, 0.0,
         m, 0.0, 0.0, 0.0, s, -s, 0.0, 0.0,
     ];
-    let leaves = post.eval(&observed)?;
-    assert_eq!(leaves, vec![m, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
-    assert_ne!(leaves, vec![m, 0.0, 0.0, 0.0, s, -s, 0.0, 0.0]);
+    assert!(post.eval(&observed).is_err());
+    Ok(())
+}
+
+#[test]
+fn guarded_patch_accepts_exactly_scalable_mixed_magnitudes() -> Fallible<()> {
+    // A power-of-two ratio is exactly reversible in binary64, so the
+    // guard should not reject this merely because normalization is needed.
+    let m = 2.0_f64.powi(1023);
+    let s = 2.0_f64.powi(900);
+    assert_eq!((s / m) * m, s);
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    let leaves = post.eval(&vec![m, m, 0.0, m, 0.0, s, -s])?;
+    assert_eq!(leaves.len(), 4);
+    assert!(leaves.iter().all(|v| v.is_finite()), "{leaves:?}");
+    assert!(leaves[2] > 0.0 && leaves[3] < 0.0, "{leaves:?}");
     Ok(())
 }
