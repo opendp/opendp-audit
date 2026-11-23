@@ -37,10 +37,10 @@ The test enumerates the 55 strictly positive three-outcome rational distribution
 
 ## Findings
 
-**Confirmed source-level correctness mismatch, without an executed OpenDP reproduction.** The parameter documented as the per-iteration early stopping probability is not the probability realized by the implementation. The impact is selection behavior, utility, and runtime; **no privacy violation is claimed**. Searches of the audit repository and upstream issues/PRs by symbol, stopping parameter, and geometric-selection terms did not reveal an equivalent tracked fix. No issue or PR was opened under current user restrictions.
+**Confirmed source-level correctness mismatch on upstream `main`, without an executed OpenDP reproduction.** The documented per-iteration stopping probability differs from the realized probability. Impact: selection behavior, utility, and runtime; **no privacy violation is claimed**. **Upstream disposition: Pending PR.** [OpenDP PR #2657](https://github.com/opendp/opendp/pull/2657) is open, draft, and unmerged. Its legacy-constructor patch replaces the reciprocal logarithm with `-ln_1p(-stop_probability)` and adds a regression for `p=0.01`. That patch addresses the reported mismatch in the PR branch, but is **not yet on `main`**. Our prior search incorrectly reported no existing corrective PR. No new issue or PR was opened under the user's restrictions.
 
 ## Unresolved questions
 
-- Decide whether to honor the exact dyadic-rational input probability using repeated Bernoulli draws or to document a conservatively rounded geometric-rate approximation.
-- Correct the implementation, proof pseudocode, and documentation together; run compiled Rust regressions for representative and extreme `p` values.
+- Track [PR #2657](https://github.com/opendp/opendp/pull/2657) through merge and independently test its proposed `-ln_1p(-p)` rate conversion, including floating-point extreme `p` boundaries and the legacy constructor's stochastic semantics.
+- Recheck the upstream source and relevant proof documentation after merge; run compiled Rust regressions for representative and extreme `p` values.
 - Check all child scorer failure paths and the full applicability of the private-selection `2ε` theorem.

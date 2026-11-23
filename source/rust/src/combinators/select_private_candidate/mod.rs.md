@@ -46,10 +46,14 @@ The privacy map computes twice the child epsilon using `inf_mul(&2.0)`. The real
 
 An independent, exact-rational [reference model](../../../../../tools/tests/test_select_private_candidate_model.py) analytically tests the retained early-stop distribution's factor-two privacy claim. It checks 15,125 directed pairs of full-support three-outcome scorer distributions across five stopping probabilities; each output likelihood ratio stays within the square of the base likelihood-ratio bound. These checks do **not** execute Rust or resolve the confirmed stopping-rate mismatch. They support keeping the privacy assessment **Partial**, not classifying the mismatch as a demonstrated privacy undercount.
 
+### Upstream disposition: Pending PR
+
+[OpenDP PR #2657](https://github.com/opendp/opendp/pull/2657) is an **open draft, unmerged** proposed fix for this exact rate/scale mismatch. Its change to the legacy `make_select_private_candidate` constructor replaces `-1/ln(1-p)` with `-ln1p(-p)`, passed as the geometric sampler's rate, and includes `test_private_selection_legacy_stopping_probability` with a consistently below-threshold scorer at `p=0.01`. The PR also introduces `make_select_above_threshold` and deprecates the legacy constructor. The fix is **pending**, not present in the pinned upstream `main` revision; the PR's tests and numerical edge cases have not been independently executed or verified in this audit. The previous search incorrectly reported that no corrective PR existed.
+
 ## Next checks
 
-- Correct the rate/scale mismatch by passing an appropriately rounded `-ln(1-p)` to the geometric sampler or by drawing exact rational Bernoulli(`p`) trials after unsuccessful scores.
-- Add compiled Rust regression coverage using a constant below-threshold, zero-privacy-cost scorer, checking first-iteration stop frequencies for `p=0.01`, `0.5`, and `0.9`. Include small-positive and near-one boundaries.
-- Update the upstream proof pseudocode and theorem correspondence. Independently review privacy assumptions for fallible child mechanisms.
+- Recheck [PR #2657](https://github.com/opendp/opendp/pull/2657) after merge; re-review the modified legacy constructor and its numerical edge cases, especially small positive and near-one `p`.
+- Execute upstream compiled Rust regressions, including the PR's deterministic repeated-scorer test and additional stopping-rate checks for `p=0.5` and `0.9`.
+- Check proof-document correspondence for the legacy constructor and independently review privacy assumptions for fallible child mechanisms.
 
 No GitHub issue or PR was created, following the user's restrictions.
