@@ -6,6 +6,8 @@ on:
       - '.github/workflows/polars-replace-opendp.yml'
       - 'tools/integration/polars_replace_runtime.py'
       - 'tools/integration/polars_replace_open_dp.rs'
+      - 'tools/integration/polars_replace_repaired_open_dp.rs'
+      - 'tools/integration/patch_polars_replace_duplicate_keys.py'
   workflow_dispatch:
 
 permissions:
@@ -59,3 +61,16 @@ jobs:
           cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
             --no-default-features --features contrib,polars \
             --test polars_replace_open_dp -- --nocapture
+      - name: Apply public-key validation patch in ephemeral checkout only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/integration/patch_polars_replace_duplicate_keys.py \
+            opendp-upstream/rust/src/transformations/make_stable_expr/expr_replace/mod.rs
+          cp tools/integration/polars_replace_repaired_open_dp.rs \
+            opendp-upstream/rust/tests/
+      - name: Verify repaired OpenDP constructor and valid-key controls
+        run: |
+          cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
+            --no-default-features --features contrib,polars \
+            --test polars_replace_repaired_open_dp -- --nocapture
