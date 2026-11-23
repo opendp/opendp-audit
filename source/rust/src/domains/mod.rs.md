@@ -11,14 +11,14 @@ updated: 2026-11-23
 - **Scope:** `AtomDomain::new_closed`, `AtomDomain::member`, `Bounds::new_closed`, for built-in numeric and ordered simple scalars (`String`, `bool`, `char`, `&str`).
 - **Invariant:** After construction, bounded domains must return a Boolean membership result for valid scalar values, or reject unsupported bounded types at construction.
 - **Source:** [Pinned upstream implementation](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/domains/mod.rs), [`CheckAtom` implementations](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/traits/operations/mod.rs).
-- **Evidence level:** Direct source tracing; no local compiled OpenDP test in this review.
+- **Evidence level:** Source trace plus successful pinned OpenDP native regression (2 passed), run in GitHub Actions.
 
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
-| `AtomDomain::new_closed` | correctness/bounded-scalar-membership | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | Accepts ordered simple scalar bounds without checking whether membership is implemented. |
-| `AtomDomain::member` | correctness/bounded-scalar-membership | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | Forwards non-null bounded members to `CheckAtom::is_bounded`; [issue #100](https://github.com/opendp/opendp-audit/issues/100). |
+| `AtomDomain::new_closed` | correctness/bounded-scalar-membership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | Accepts ordered simple scalar bounds without checking whether membership is implemented. |
+| `AtomDomain::member` | correctness/bounded-scalar-membership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | Forwards non-null bounded members to `CheckAtom::is_bounded`; [issue #100](https://github.com/opendp/opendp-audit/issues/100). |
 | `Bounds::new_closed` | correctness/bounded-scalar-membership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | Checks order and nullity, not scalar bounded-membership support. |
 
 ## Analysis
@@ -31,8 +31,10 @@ updated: 2026-11-23
 
 **Impact:** Non-deprecated domain API correctness/usability, **not** a demonstrated privacy loss. [Cross-file investigation](../../../../investigations/bounded-atom-domain-scalar-membership.md) and [audit finding #100](https://github.com/opendp/opendp-audit/issues/100).
 
-**Limitations:** Source-confirmed call path, not native execution; custom `CheckAtom` types and other domain types are not reviewed.
+**Limitations:** Native regression executed for the listed built-ins only; custom `CheckAtom` types and other domain types are not reviewed.
 
 ## Next checks
 
-Compile the native regression against the pinned upstream commit. Either implement bounded membership for these scalar types or reject unsupported bounds during construction.
+The pinned native regression passed. Either implement bounded membership for these scalar types or reject unsupported bounds during construction.
+
+**Native verification (2026-11-23):** [Pinned OpenDP CI](https://github.com/opendp/opendp-audit/actions/runs/45112011556) executed `cargo test --no-default-features --features contrib --test bounded_atom_domain_membership` at `ef1a238634d6196b01a1a1e77d3d5ad2340e3094`: **2 passed, 0 failed**, including all simple-scalar witnesses and numeric/unbounded controls. Verification for [issue #100](https://github.com/opendp/opendp-audit/issues/100) is **Reproduced**. This does not establish privacy impact.
