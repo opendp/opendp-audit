@@ -19,8 +19,9 @@ updated: 2026-11-22
 
 - **Additional audit scope:** Composite output conversion in `_slice_to_tuple` and `_slice_to_hashmap`: lifetime of the Rust scratch pointer arrays and temporary `HashMap` child `AnyObject` values, independent of the outer descriptor.
 
-## Symbol coverage
+- **Additional audit scope:** The `(PrivacyProfile, f64)` branch of `_slice_to_tuple`, distinguishing the owned profile clone from the otherwise unreclaimed Rust delta allocation and pointer array.
 
+## Symbol coverage
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
 | `_slice_to_vector` | memory/temporary-slice-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Cross-file investigation](../../../../investigations/ffi-vector-slice-lifetime.md) |
@@ -28,6 +29,7 @@ updated: 2026-11-22
 | `_slice_to_vector` | memory/string-vector-backing-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Backing allocations](#vecstring-backing-ownership): decodes `Vec<String>` data but does not reclaim Rust-owned buffers |
 | `_slice_to_tuple` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../investigations/ffi-composite-output-ownership.md) |
 | `_slice_to_hashmap` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../investigations/ffi-composite-output-ownership.md) |
+| `_slice_to_tuple` | memory/profile-tuple-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Special tuple analysis](#special-privacyprofile-tuple-output) and [investigation](../../../../investigations/ffi-profile-tuple-output.md) |
 ## Analysis
 
 ### `_slice_to_vector` — `memory/temporary-slice-ownership`
@@ -70,6 +72,14 @@ updated: 2026-11-22
 
 **Related:** [Cross-language investigation](../../../../investigations/ffi-composite-output-ownership.md); [pending draft PR #3179](https://github.com/opendp/opendp/pull/3179).
 
+### Special PrivacyProfile tuple output
+
+**Conclusion:** The specialized tuple decoder adopts the raw `AnyObject` pointer holding the cloned `PrivacyProfile` as an `AnyObjectPtr`, and the returned `PrivacyProfile` instance stores it as `curve`. This correctly transfers ownership of the cloned profile to a Python object with a native destructor. In contrast, it reads `delta.contents.value` and the pointer array without calling a destructor on the boxed Rust `f64` and array; these two scratch allocations leak on normal decoding.
+
+**Evidence:** Rust's `tuple_curve_f64_to_raw` creates three allocations with `AnyObject::new_raw` and `util::into_raw`. Python casts `ptr_data[0]` to `AnyObjectPtr`, which has a `__del__` that calls `object_free`, and calls `PrivacyProfile(curve)`, which retains the pointer. The `f64` is read through `ctypes.POINTER(ctypes.c_double)`; the `FfiSlice` pointer array and `f64` have no corresponding frees. This is not an argument to free the profile clone a second time.
+
+**Upstream status and limits:** [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) instead keeps the clone in a temporary owner, passes a borrowed pointer to `c_to_py` (which makes an independently owned clone for escaping profiles), and releases the owner after decoding. Source inspection supports that design, but compiled tests, native allocation measurements, and exceptional conversion handling were not executed in this audit.
+
 ## Next checks
 
 Run a native conversion loop with allocation instrumentation, then verify that the eventual merged ownership implementation reclaims both the view header and pointer-array storage, including conversion errors.
@@ -79,3 +89,5 @@ Run a native conversion loop with allocation instrumentation, then verify that t
 - Validate that the eventual merged `FfiSliceOwner` reclaims `Vec<String>` C strings and the pointer array after successful and exceptional conversions; add native-allocation regression measurements.
 
 - Verify composite scratch-buffer cleanup under a native allocation checker after PR #3179 is merged; separately test normal conversions and failures.
+
+- For specialized profile tuples, verify the eventual merged implementation with compiled R/Python roundtrips and a native memory checker; consult the [dedicated investigation](../../../../investigations/ffi-profile-tuple-output.md).

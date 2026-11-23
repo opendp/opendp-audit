@@ -20,8 +20,9 @@ updated: 2026-11-22
 
 - **Additional audit scope:** Scratch ownership of tuple pointer arrays and `HashMap` output wrappers created by `opendp_data__object_as_slice`, as consumed by R and Python. Element representation, privacy properties, and special tuple payloads are excluded.
 
-## Symbol coverage
+- **Additional audit scope:** The special `(PrivacyProfile, f64)` output encoder `tuple_curve_f64_to_raw`: distinct ownership of its cloned `AnyObject`, boxed delta, and two-element pointer array, as consumed by Python or R.
 
+## Symbol coverage
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
 | `opendp_data__ffislice_of_anyobjectptrs` | memory/temporary-slice-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Cross-file investigation](../../../../../investigations/ffi-vector-slice-lifetime.md) |
@@ -34,6 +35,7 @@ updated: 2026-11-22
 | `opendp_data__object_as_slice::option_tuple2_to_raw` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../../investigations/ffi-composite-output-ownership.md) |
 | `opendp_data__object_as_slice::tuple3_l0Pinf_distance_to_raw` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../../investigations/ffi-composite-output-ownership.md) |
 | `opendp_data__object_as_slice::hashmap_to_raw` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../../investigations/ffi-composite-output-ownership.md) |
+| `opendp_data__object_as_slice::tuple_curve_f64_to_raw` | memory/profile-tuple-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Special tuple analysis](#special-privacyprofile-tuple-output) and [investigation](../../../../../investigations/ffi-profile-tuple-output.md) |
 ## Analysis
 
 ### Native helper and cleanup — `memory/temporary-slice-ownership`
@@ -89,6 +91,14 @@ updated: 2026-11-22
 
 **Related:** [Cross-language investigation](../../../../../investigations/ffi-composite-output-ownership.md). [Pending draft PR #3179](https://github.com/opendp/opendp/pull/3179) introduces `FfiSliceOwner::pointers`, which keeps the array alive and frees it on owner destruction, and `owner.keep` for `HashMap` key/value children.
 
+### Special PrivacyProfile tuple output
+
+**Conclusion:** The specialized `(PrivacyProfile, f64)` producer allocates three separately owned resources: a cloned profile wrapped in a raw `AnyObject`, a boxed `f64` delta, and a boxed two-element pointer array. Python adopts and ultimately frees the cloned profile via an `AnyObjectPtr`, but it never frees the boxed `f64` or the array; `slice_free` frees only the outer descriptor. This is distinct from ordinary tuple arrays, which point into borrowed source fields.
+
+**Evidence:** `tuple_curve_f64_to_raw` calls `AnyObject::new_raw(curve.clone())`, `util::into_raw(*delta)`, then `util::into_raw([curve_ptr, delta_ptr])` for `FfiSlice.ptr`. `AnyObject::new_raw` and `util::into_raw` produce heap-owned pointers ([pinned source](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/ffi/any.rs); [allocation helper](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/ffi/util.rs)). `opendp_data__slice_free` explicitly excludes pointees ([pinned source](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/data/ffi/mod.rs)). The R decoder has an independent unsupported-type problem, recorded in the linked investigation.
+
+**Limits and pending work:** Only this special output branch is assessed; `(f64, ExtrinsicObject)` and `Function` output paths remain separate. No native memory profiler or runtime regression was executed. [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) retains the scratch profile under `FfiSliceOwner` and borrows the delta until conversion finishes, addressing the leaked scratch allocations if correctly integrated.
+
 ## Next checks
 
 - Check the eventual merged code and native regression tests for complete release of pointer-array storage under both success and error conditions.
@@ -99,3 +109,5 @@ updated: 2026-11-22
 - Validate that the eventual merged `FfiSliceOwner` reclaims `Vec<String>` C strings and the pointer array after successful and exceptional conversions; add native-allocation regression measurements.
 
 - Verify composite scratch-buffer cleanup under a native allocation checker after PR #3179 is merged; separately test normal conversions and failures.
+
+- For specialized profile tuples, verify the eventual merged implementation with compiled R/Python roundtrips and a native memory checker; consult the [dedicated investigation](../../../../../investigations/ffi-profile-tuple-output.md).

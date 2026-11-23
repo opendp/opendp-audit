@@ -19,8 +19,9 @@ updated: 2026-11-22
 
 - **Additional audit scope:** Composite output conversion in `slice_to_tuple` and `slice_to_hashmap`: whether reading borrowed fields frees Rust-created scratch pointer arrays and `HashMap` key/value wrappers.
 
-## Symbol coverage
+- **Additional audit scope:** Specialized `(PrivacyProfile, f64)` output through `slice_to_tuple` and `voidptr_to_sexp`, focusing on whether an R `privacy_profile` value can be decoded as a tuple member.
 
+## Symbol coverage
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
 | `anyobjectptr_to_sexp` | memory/ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Analysis](#analysis): returned `FfiSlice` descriptor is not freed on the successful non-opaque path; cleanup is proposed in upstream PR #3176 |
@@ -29,6 +30,8 @@ updated: 2026-11-22
 | `voidptr_to_sexp` | memory/string-vector-backing-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Backing allocations](#vecstring-backing-ownership): reads and copies `char **` data, but does not release Rust-owned buffers |
 | `slice_to_tuple` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../investigations/ffi-composite-output-ownership.md) |
 | `slice_to_hashmap` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../investigations/ffi-composite-output-ownership.md) |
+| `slice_to_tuple` | correctness/profile-tuple-output | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Special tuple analysis](#special-privacyprofile-tuple-output) and [investigation](../../../../investigations/ffi-profile-tuple-output.md) |
+| `voidptr_to_sexp` | correctness/profile-tuple-output | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Special tuple analysis](#special-privacyprofile-tuple-output): no `PrivacyProfile` branch exists |
 ## Analysis
 
 ### `anyobjectptr_to_sexp` — `memory/ownership`
@@ -77,6 +80,14 @@ updated: 2026-11-22
 
 **Related:** [Cross-language investigation](../../../../investigations/ffi-composite-output-ownership.md); [pending draft PR #3179](https://github.com/opendp/opendp/pull/3179).
 
+### Special PrivacyProfile tuple output
+
+**Conclusion:** R cannot decode the `(PrivacyProfile, f64)` output emitted by the specialized Rust tuple branch: `slice_to_tuple` sends the first member to `voidptr_to_sexp`, whose type switch handles primitives, `String`, `bool`, and `ExtrinsicObject`, but not `PrivacyProfile`. It therefore calls `error_unknown_type` for the first tuple member. The separate top-level `anyobjectptr_to_sexp` `PrivacyProfile` special case is bypassed because the *outer* type is `Tuple`.
+
+**Reachability:** `make_approximate` applied to a `ZeroConcentratedDivergence` measurement produces `Approximate<ZeroConcentratedDivergence>`; `make_zCDP_to_approxDP` converts its distance to `(PrivacyProfile, f64)` under the `ConcentratedMeasure` implementation. An R `measurement_map` result then reaches `anyobjectptr_to_sexp` and `slice_to_tuple`. A source-level candidate check is `make_zCDP_to_approxDP(make_approximate(make_gaussian(...)))(d_in = 1L)`. Existing R tests cover the non-approximate Gaussian cast, not this nested type.
+
+**Upstream status and limits:** The reviewed [PR #3179 R converter](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/R/opendp/src/convert.c) still uses `voidptr_to_sexp` for each tuple member, and its branch at commit `bccc2aeb6e38ac5b2ad7894eae8fa441080d8119` likewise lacks a profile case. The PR does address Rust scratch ownership but does **not** resolve this decoding gap on the inspected patch. This is a source-confirmed dispatch mismatch, not a runtime reproduction. It is a correctness/usability issue, not evidence of a privacy guarantee failure. Tests of actual R error text and failure-path cleanup remain outstanding.
+
 ## Next checks
 
 - After PR #3176 merges, inspect the merged SHA and test normal returns and nonlocal R error exits under a native leak checker.
@@ -87,3 +98,5 @@ updated: 2026-11-22
 - Validate that the eventual merged `FfiSliceOwner` reclaims `Vec<String>` C strings and the pointer array after successful and exceptional conversions; add native-allocation regression measurements.
 
 - Verify composite scratch-buffer cleanup under a native allocation checker after PR #3179 is merged; separately test normal conversions and failures.
+
+- For specialized profile tuples, verify the eventual merged implementation with compiled R/Python roundtrips and a native memory checker; consult the [dedicated investigation](../../../../investigations/ffi-profile-tuple-output.md).
