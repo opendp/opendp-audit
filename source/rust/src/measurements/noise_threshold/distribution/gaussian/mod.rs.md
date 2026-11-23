@@ -21,7 +21,6 @@ updated: 2026-11-23
 | `measurements::noise_threshold::distribution::gaussian::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | correctness/gaussian-sensitivity-tightening | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Sensitivity tightening](#sensitivity-tightening) |
 | `measurements::noise_threshold::distribution::gaussian::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | privacy/gaussian-zero-distance | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Zero distance and zero noise scale](#zero-distance-and-zero-noise-scale) |
 | `measurements::noise_threshold::distribution::gaussian::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | privacy/gaussian-tail-composition | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Tail and delta accounting](#tail-and-delta-accounting) |
-
 | `measurements::noise_threshold::distribution::gaussian::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | numerical/delta-resolution | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Joint delta precision floor](#joint-delta-precision-floor) |
 
 ## Analysis
