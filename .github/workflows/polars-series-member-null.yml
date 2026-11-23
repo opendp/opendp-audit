@@ -1,0 +1,45 @@
+name: Verify nullable SeriesDomain membership against pinned OpenDP
+
+on:
+  push:
+    paths:
+      - '.github/workflows/polars-series-member-null.yml'
+      - 'tools/integration/polars_series_member_null_backing.rs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-opendp:
+    name: Native pinned Polars SeriesDomain null-bit regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_BUILD_JOBS: '2'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - name: Checkout audit regression
+        uses: actions/checkout@v4
+      - name: Checkout pinned OpenDP
+        uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
+          path: opendp-upstream
+          persist-credentials: false
+      - name: Verify pinned source and install standalone regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C opendp-upstream rev-parse HEAD)" = 'ef1a238634d6196b01a1a1e77d3d5ad2340e3094'
+          grep -Fq 'tag = "py-1.36.1"' opendp-upstream/rust/Cargo.toml
+          mkdir -p opendp-upstream/rust/tests
+          cp tools/integration/polars_series_member_null_backing.rs opendp-upstream/rust/tests/
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Execute compiled OpenDP/Polars membership regression
+        run: |
+          cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
+            --no-default-features --features contrib,polars \
+            --test polars_series_member_null_backing -- --nocapture
