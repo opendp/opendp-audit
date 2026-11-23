@@ -24,7 +24,7 @@ jobs:
           python-version: '3.11'
       - name: Install native OpenDP and pinned MBI
         run: |
-          python -m pip install 'opendp==0.16.0a20261122001' 'mbi==2.0.0' 'numpy==2.3.5'
+          python -m pip install 'opendp==0.16.0a20261122001' 'mbi==2.0.0' 'numpy==2.3.5' 'polars==1.36.1'
       - name: Execute native AIM and MST MBI scorer and privacy-map tests
         run: |
           python -u tools/integration/mbi_public_model_score_native.py
