@@ -58,5 +58,36 @@ class TestInt64SumModularOverflow(unittest.TestCase):
         self.assertEqual(actual / claimed, 7.5)
 
 
+@unittest.skipIf(np is None, "numpy is an optional audit dependency")
+class TestUInt64SumModularOverflow(unittest.TestCase):
+    def setUp(self):
+        self.x = np.full((16, 1), VALUE, dtype=np.uint64)
+        self.x_prime = self.x.copy()
+        self.x_prime[0, 0] = 0
+
+    def test_input_rows_satisfy_bounded_l1_norm(self):
+        for data in (self.x, self.x_prime):
+            scale = np.max(np.abs(data), axis=1, keepdims=True, initial=0)
+            scale = np.where(scale == 0, 1.0, scale)
+            row_norm = np.linalg.norm(data / scale, ord=1, axis=1, keepdims=True)
+            mask = np.isfinite(data).all(axis=1, keepdims=True) & (
+                row_norm <= float(VALUE) / scale
+            )
+            self.assertTrue(mask.all())
+
+    def test_unsigned_wraparound_breaks_sensitivity_inside_u64_range(self):
+        a = self.x.sum(axis=0)
+        b = self.x_prime.sum(axis=0)
+        self.assertEqual(a.dtype, np.dtype("uint64"))
+        self.assertEqual(b.dtype, np.dtype("uint64"))
+        self.assertEqual(int(a[0]), 0)  # 16 * 2**60 = 2**64 (wraps)
+        self.assertEqual(int(b[0]), 15 * VALUE)
+        observed = abs(int(a[0]) - int(b[0]))
+        claimed = (2 // 2) * 2 * float(VALUE)
+        self.assertEqual(observed, 15 * VALUE)
+        self.assertEqual(observed / claimed, 7.5)
+        self.assertLess(observed, 2**64)  # true distance fits output u64
+
+
 if __name__ == "__main__":
     unittest.main()
