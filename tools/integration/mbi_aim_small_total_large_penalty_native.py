@@ -15,7 +15,7 @@ import opendp.prelude as dp
 
 from opendp.extras.mbi import AIM, ContingencyTable, Count, Marginals
 from opendp.extras.mbi._aim import _make_aim_scores, _make_aim_select
-from opendp.extras.mbi._utilities import typed_dict_domain, typed_dict_distance
+from opendp.extras.mbi._utilities import typed_dict_domain, typed_dict_distance, make_noise_marginal
 
 PENALTY = float(2**54 + 8)
 NUM_CATEGORIES = 9
@@ -97,6 +97,22 @@ def analytic_event_ratio(table):
           "sensitivity", sensitivity, flush=True)
     assert sensitivity == 1.0
     d_select = float(np.nextafter(np.nextafter(1.0 - d_measure, -np.inf), -np.inf))
+    # Diagnose whether the second (count-noise) privacy search can meet the
+    # unusually small measurement budget with finite valid noise scales.
+    for trial_scale in (1e12, 1e14, 1e15, 1e16, 1e18, 1e100):
+        try:
+            m_noise = make_noise_marginal(
+                d, metric, dp.max_divergence(),
+                clique=CLIQUE_A, scale=trial_scale,
+            )
+            actual_eps = m_noise.map(distance)
+            print("tiny-budget noise scale", trial_scale,
+                  "epsilon", actual_eps,
+                  "check", m_noise.check(distance, d_measure), flush=True)
+        except Exception as err:
+            print("tiny-budget noise scale", trial_scale, "ERROR",
+                  type(err).__name__, str(err)[:500], flush=True)
+
     select = _make_aim_select(
         d, metric, dp.max_divergence(),
         d_in=distance, d_out=d_select, d_measure=d_measure,
@@ -169,4 +185,7 @@ if __name__ == "__main__":
     dp.enable_features("contrib", "idealized-numerics", "honest-but-curious")
     table = public_table()
     analytic_event_ratio(table)
-    release_both(table)
+    try:
+        release_both(table)
+    except Exception as err:
+        print("HIGH_LEVEL_RELEASE_UNAVAILABLE", type(err).__name__, str(err)[:1200], flush=True)
