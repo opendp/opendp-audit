@@ -1,6 +1,9 @@
 """Real Polars 1.36.1 executor tests, not native OpenDP construction."""
 import datetime as dt
+import json
 import math
+import subprocess
+import sys
 import unittest
 
 import polars as pl
@@ -36,13 +39,27 @@ class PinnedPolarsToPhysicalTests(unittest.TestCase):
         self.assertEqual(physical(["C", "B", "A"], enum).to_list(), [2, 0, 1])
 
     def test_categorical_codes_change_with_category_appearance(self):
-        # OpenDP now rejects Categorical because its assignment may be data-dependent.
-        self.assertFalse(pl.using_string_cache())
-        before = physical(["red", "red"], pl.Categorical)
-        after = physical(["blue", "red", "red"], pl.Categorical)
-        self.assertEqual(before.dtype, pl.UInt32)
-        self.assertEqual(after.dtype, pl.UInt32)
-        self.assertNotEqual(before[0], after[1])
+        # Polars 1.36.1 enables a process-global string cache by default.
+        # Compare fresh processes so a previous dataset does not register
+        # its category labels in the same global cache as the next dataset.
+        script = (
+            "import json, sys, polars as pl; "
+            "s = pl.Series('x', json.loads(sys.argv[1]), dtype=pl.Categorical); "
+            "p = pl.DataFrame({'x': s}).lazy().select(pl.col('x').to_physical()).collect()['x']; "
+            "print(json.dumps({'dtype': str(p.dtype), 'codes': p.to_list()}))"
+        )
+
+        def fresh_codes(values):
+            data = subprocess.check_output(
+                [sys.executable, "-c", script, json.dumps(values)], text=True
+            )
+            return json.loads(data)
+
+        before = fresh_codes(["red", "red"])
+        after = fresh_codes(["blue", "red", "red"])
+        self.assertEqual(before["dtype"], "UInt32")
+        self.assertEqual(after["dtype"], "UInt32")
+        self.assertNotEqual(before["codes"][0], after["codes"][1])
 
     def test_temporal_i64_storage(self):
         samples = [
