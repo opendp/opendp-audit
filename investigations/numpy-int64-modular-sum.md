@@ -37,6 +37,12 @@ ratio                = 7.5
 
 Both outputs have `int64` dtype. The first value is the wraparound of the mathematical sum `2**63`, not the actual mathematical sum. The second is in range. This refutes the *mathematical stability claim* with ordinary valid inputs without relying on dtype promotion or nonfinite floats.
 
+## Unsigned counterexample with representable output distance
+
+A second independent NumPy 2.3.5 experiment uses `uint64` rather than signed integers. Let `v=2**60` and `size=16`. Dataset `x` has sixteen rows `[v]`, and `x'` replaces one row with zero. Both arrays satisfy the same finite row-norm constraint with `T=u64`, `p=1`, `norm=float(v)`.
+
+NumPy computes `sum(x) = 0_u64` (because `16*v=2**64` wraps) and `sum(x') = (15*v)_u64`, maintaining `uint64` dtype. The actual represented difference `15*v = 17293822569102704640` **fits** in `u64`, whereas the formula claims only `2*v=2305843009213693952`. The 7.5× mismatch therefore does **not** rely on an output distance too large for the declared integer-distance type. See the unsigned tests in [regression](../tools/tests/test_numpy_int64_sum_modular_overflow.py) and native [probe script](../tools/integration/numpy_int64_sum_native.py).
+
 ## Privacy interpretation and limit
 
 This is an intended-map underestimation, but **not a measured privacy breach of the generated private measurement**. The constructor's callback computes a Python `float` sensitivity from the domain's floating `norm`; its output metric is `L1Distance<i64>` whose callback serialization expects `i64`. The inspected conversion code rejects float-to-integer type mismatches. Consequently a native `make_np_sum.map(2)` might fail before returning the incorrect bound, and `make_private_np_sum` may be unusable. Native validation must establish the exact FFI behavior and whether any private composition can be invoked or certified.
