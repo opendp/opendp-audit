@@ -52,6 +52,16 @@ The audit repository contains a [minimal patch script](https://github.com/opendp
 
 This patch is **not a complete proof** that every supported public literal mapping is accepted or rejected exactly as the Polars runtime would. In particular, `LiteralValue::Range` is not a `Series` at the guard, and potential duplicate equivalence after a supported cast (not just before) and optimizer-specific behavior remain for review. An upstream fix should evaluate the complete public literal repertoire and add regression cases for it.
 
+### Public Range materialization and binary-to-String casts
+
+**Executed pinned native OpenDP/Polars results:** [CI #45109555555](https://github.com/opendp/opendp-audit/actions/runs/45109555555) completed successfully with four public-literal probes. Both invalid Range patterns passed the **fallible OpenDP constructor** and failed at Polars collection: `Range(0,2,String)` produced `unsupported range datatype str`, and `Range(-1,2,UInt32)` produced a UInt32 range conversion error. Valid `Range(1,4,Int32)` operated normally on input `[1,2,3,4]`, producing `[10,10,10,4]`. A Binary key containing invalid UTF-8 byte `0xff`, with String input and replacement, also passed OpenDP construction and failed at collection on two different data values. These results are identified in the [native test fixture](https://github.com/opendp/opendp-audit/blob/ccf70c8025b20c68fc55109106317218fcb44a86/tools/integration/polars_replace_range_open_dp.rs) by `RANGE_PROBE_*: DEFERRED_ERROR` and `BINARY_PROBE_INVALID_UTF8: DEFERRED_ERROR`. The baseline duplicate-key regression (3/3) and earlier experimental repaired-key test (5/5) also passed in this workflow.
+
+**Pinned source mechanism:** OpenDP's `literal_len` accepts `RangeLiteralValue` by subtracting bounds and `is_cast_fallible` returns `false` for all casts to `String`. It never evaluates public Range materializability or strict UTF-8 conversion before constructing the stable transformation. Pinned Polars's `LiteralExpr` only materializes three integer Range dtypes, with bound checks; its `replace` executor performs `strict_cast` of `old` and `new` keys to the input dtype. The two errors arise from public literals alone, irrespective of the private dataset.
+
+**Cast uniqueness checks:** [Compiled `polars==1.36.1` probes](https://github.com/opendp/opendp-audit/actions/runs/45109432244) observed **no** post-cast uniqueness collisions for sampled nearby `Float64` keys, distinct signed integers or valid UTF-8 binary strings. Invalid UTF-8 binary conversion failed for both matching and nonmatching String inputs. This is sampled negative evidence only, not a proof that all supported casts are injective.
+
+**Disposition:** The confirmed public Range and Binary failures are consolidated with [issue #56](https://github.com/opendp/opendp-audit/issues/56), because they share the same missing constructor-time public replacement validation. The CI-only Series uniqueness prototype does not fix either new case, and upstream OpenDP remains unchanged. No private-data-dependent failure or differential-privacy leak was established.
+
 ### Evidence limitations
 
 The pinned source and existing tests were read using the GitHub connector. The finite-alphabet JavaScript model was executed independently; the three duplicate-key examples `[1,1]`, `[NULL,NULL]`, and `[1,NULL,1]` were also checked for nonuniqueness in the model. Compiled Polars was invoked in the dedicated CI integration job. Native OpenDP Rust compilation and constructor execution succeeded for the three scoped regression tests. This does not establish all Polars dtype/optimizer paths or a general privacy theorem. Existing unit tests exercise valid mapping/null imputation and mismatched dtypes but omit duplicate public patterns.
@@ -59,11 +69,11 @@ The pinned source and existing tests were read using the GitHub connector. The f
 ## Findings
 
 - **No nullability underapproximation** in the 56,931 modeled row/domain combinations; completeness remains Partial due to untested compiled backend and casting.
-- **Reproduced correctness defect with successful prototype:** pinned OpenDP accepts duplicate public old keys and fails at Polars collection; an ephemeral constructor-time uniqueness patch passes five repaired native regressions. [Issue #56](https://github.com/opendp/opendp-audit/issues/56) remains open because upstream has not adopted the patch.
+- **Reproduced public-argument validation defects:** pinned OpenDP defers rejection of duplicate public keys, unsupported/invalid public Range literals and invalid UTF-8 public Binary-to-String casts until collection. The temporary Series uniqueness patch remedies only the duplicate-key subcase. [Issue #56](https://github.com/opendp/opendp-audit/issues/56) is the consolidated open record; upstream remains unfixed.
 - **No new privacy leak established** within the limited review.
 
 ## Unresolved questions
 
 - Port the successful [experimental constructor-time fix](https://github.com/opendp/opendp-audit/commit/c7c2f02034c9793d37a7fdea6eba95bd9c80da08) into an upstream-reviewed change, covering all accepted public literal types and equivalence after allowed casts. Change upstream regression to assert constructor-time rejection and retain positive controls.
-- Check NULL/NaN key equality and string, float, integer cast behavior under optimized execution.
+- Add constructor-time checks for public Range materialization and public strict casts, including post-cast key uniqueness. Check other numerical/string/temporal cast behavior under optimized execution.
 - Explore aggregation `fill` mapping and optimizer-specific behavior not included in the rowwise model.
