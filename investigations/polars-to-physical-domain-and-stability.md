@@ -36,9 +36,9 @@ The independent Polars regression checks representative signed pre-epoch values,
 
 ## Verification boundary and findings
 
-**Inspected:** The exact upstream Rust constructor, native test source, domain setter implementations and stable cut transformation. **Executed:** The separate real Polars 1.36.1 integration script if/when its associated GitHub Actions workflow passes. **Not executed:** The OpenDP Rust constructor or a complete composed differential-privacy release.
+**Inspected:** The exact upstream Rust constructor, native test source, domain setter implementations and stable cut transformation. **Executed:** Seven regression tests against the **actual compiled Polars 1.36.1 executor**, all passed in [GitHub Actions run 45109018877](https://github.com/opendp/opendp-audit/actions/runs/45109018877). They cover date, temporal, Enum widths and category-code behavior, float NaN and nulls. The categorical test uses separate fresh processes because Polars 1.36.1 enables a process-global string cache. **Not executed:** The OpenDP Rust constructor, a complete composed differential-privacy release, or OpenDP's native source test suite.
 
-No new unreported defect identified by source inspection; full native correctness/privacy remains **Partial**. A failed runtime integration check requires reassessment before accepting the historical-fix regression.
+No new unreported defect identified by source inspection or pinned Polars runtime tests; native OpenDP correctness/privacy remains **Partial**. The initial runtime CI attempt failed on an incorrect assumption that string caching was disabled; commit [42440ec](https://github.com/opendp/opendp-audit/commit/42440ecaec46deef52c6dc99d4081f6cd45d4c08) isolated fresh-process categorical checks, and the rerun passed.
 
 ## Remaining checks
 
