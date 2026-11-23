@@ -80,7 +80,7 @@ def sum_strategy(values, kind, strategy):
 
 def integer_sum_size_limit(lower, upper, min_val, max_val):
     """Counterpart of exact arbitrary-precision size_limit logic."""
-    limit = sys.maxsize  # sufficient for tested signed 64-bit platform sizes
+    limit = 2**64 - 1  # Rust usize::MAX on the 64-bit CI target
     if upper > 0:
         limit = min(limit, max_val // upper)
     if lower < 0:
