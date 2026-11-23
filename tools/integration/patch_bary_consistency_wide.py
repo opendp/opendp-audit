@@ -1,4 +1,4 @@
-"""Experimentally normalize large b-ary values in f64 with fail-closed input checks.
+"""Experimentally preserve complete exactly consistent trees before lossy f64 normalization.
 
 Applies only to a checkout of the pinned upstream OpenDP revision in CI.
 Never commits changes to opendp/opendp. Every substitution is fail-closed.
@@ -68,20 +68,48 @@ def main():
             1.0_f64
         };
         if scale != 1.0 {
-            // Fail closed instead of silently discarding smaller, finite
-            // measurements. Roundtrip equality is only a local input
-            // preservation check, NOT a full numerical error bound.
-            for v in &mut tree {
-                let original = *v;
-                let normalized = original / scale;
-                if normalized * scale != original {
-                    return fallible!(
-                        FailedFunction,
-                        "normalization would lose input precision"
-                    );
+            // The scaled representation may lose tiny but valid values.
+            // When that happens, recognize a complete EXACTLY consistent
+            // tree using arbitrary-precision rational representations of
+            // the input floats. Its LS projection is the original leaves,
+            // so there is no need to scale or reconcile it.
+            let lossy = tree.iter().any(|v| (v / scale) * scale != *v);
+            if lossy {
+                let leaf_start = num_nodes_from_num_layers(layers - 1, branching_factor);
+                let exactly_consistent = if zero_leaves == 0 {
+                    tree.iter()
+                        .copied()
+                        .map(num::BigRational::from_float)
+                        .collect::<Option<Vec<_>>>()
+                        .map_or(false, |nodes| {
+                            (0..leaf_start).all(|i| {
+                                let child_start = i * branching_factor + 1;
+                                let children = &nodes[child_start..child_start + branching_factor];
+                                nodes[i] == children.iter().cloned().sum::<num::BigRational>()
+                            })
+                        })
+                } else {
+                    false
+                };
+                if exactly_consistent {
+                    return tree[leaf_start..]
+                        .iter()
+                        .copied()
+                        .map(|v| {
+                            let out = TOA::round_cast(v)?;
+                            if !out.is_finite() {
+                                return fallible!(FailedFunction, "consistent leaf overflows output");
+                            }
+                            Ok(out)
+                        })
+                        .collect::<Fallible<Vec<TOA>>>();
                 }
-                *v = normalized;
+                return fallible!(
+                    FailedFunction,
+                    "normalization would lose input precision"
+                );
             }
+            tree.iter_mut().for_each(|v| *v /= scale);
         }
 
         // zero out all zero variance zero nodes on the tree""",
@@ -139,7 +167,7 @@ def main():
     if source == original:
         raise RuntimeError("Patch made no changes")
     path.write_text(source)
-    print("Applied experimental guarded normalized-f64 fix to local CI checkout")
+    print("Applied experimental exact-consistency shortcut and guarded f64 normalization")
 
 
 if __name__ == "__main__":

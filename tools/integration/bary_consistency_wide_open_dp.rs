@@ -221,20 +221,23 @@ fn patched_200_complete_tree_inputs_match_independent_least_squares() -> Fallibl
 }
 
 #[test]
-fn guarded_patch_rejects_underflow_of_consistent_mixed_scale_tree() -> Fallible<()> {
-    // This input is internally consistent, but normalizing by M would
-    // silently discard the two nonzero small leaves. Until a genuinely
-    // multiscale algorithm is available, return Err rather than fake zeros.
+fn exact_consistency_shortcut_preserves_mixed_scale_three_layer_tree() -> Fallible<()> {
+    // The complete tree is EXACTLY consistent in binary floating values.
+    // Scaling by M would erase the two tiny leaves; exact rational checking
+    // permits returning the correct leaf layer without normalization.
     let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
     assert_eq!(s / m, 0.0);
     let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
-    assert!(post.eval(&vec![m, m, 0.0, m, 0.0, s, -s]).is_err());
+    assert_eq!(
+        post.eval(&vec![m, m, 0.0, m, 0.0, s, -s])?,
+        vec![m, 0.0, s, -s]
+    );
     Ok(())
 }
 
 #[test]
-fn guarded_patch_rejects_underflow_in_four_layer_tree() -> Fallible<()> {
+fn exact_consistency_shortcut_preserves_mixed_scale_four_layer_tree() -> Fallible<()> {
     let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
     let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
@@ -242,7 +245,10 @@ fn guarded_patch_rejects_underflow_in_four_layer_tree() -> Fallible<()> {
         m, m, 0.0, m, 0.0, 0.0, 0.0,
         m, 0.0, 0.0, 0.0, s, -s, 0.0, 0.0,
     ];
-    assert!(post.eval(&observed).is_err());
+    assert_eq!(
+        post.eval(&observed)?,
+        vec![m, 0.0, 0.0, 0.0, s, -s, 0.0, 0.0]
+    );
     Ok(())
 }
 
@@ -258,5 +264,30 @@ fn guarded_patch_accepts_exactly_scalable_mixed_magnitudes() -> Fallible<()> {
     assert_eq!(leaves.len(), 4);
     assert!(leaves.iter().all(|v| v.is_finite()), "{leaves:?}");
     assert!(leaves[2] > 0.0 && leaves[3] < 0.0, "{leaves:?}");
+    Ok(())
+}
+
+#[test]
+fn exact_consistency_shortcut_refuses_f64_rounding_alias() -> Fallible<()> {
+    // Naive f64 addition makes M+s==M, but as exact binary rationals
+    // the right-hand leaf sum differs from its parent by s. The shortcut
+    // must not accept a merely rounded, inconsistent hierarchy.
+    let m = 2.0_f64.powi(1023);
+    let s = 1.0e-20_f64;
+    assert_eq!(m + s, m);
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    let observed = vec![m, m, 0.0, m, s, 0.0, 0.0];
+    assert!(post.eval(&observed).is_err());
+    Ok(())
+}
+
+#[test]
+fn exact_consistency_shortcut_does_not_change_incomplete_tree_handling() -> Fallible<()> {
+    // The exact path is deliberately restricted to complete trees.
+    // Incomplete trees with loss under scaling must still fail closed.
+    let m = 2.0_f64.powi(1023);
+    let s = 1.0e-20_f64;
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    assert!(post.eval(&vec![m, m, 0.0, m, 0.0, s]).is_err());
     Ok(())
 }
