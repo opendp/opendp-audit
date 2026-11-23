@@ -18,8 +18,8 @@ updated: 2026-11-23
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
 | `ZExpFamily<1>` | documentation/discrete-laplace-pmf | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Duplicated negative PMF](#duplicated-negative-pmf) and [issue #48](https://github.com/opendp/opendp-audit/issues/48) |
-| `<ZExpFamily<1> as Sample>::sample` | correctness/shifted-discrete-laplace | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Shifted sampler trace](#shifted-sampler-trace) and [investigation](../../../../../investigations/cks20-discrete-laplace-normalization.md) |
-| `<RV as MakeNoise<VectorDomain<AtomDomain<IBig>>>>::make_noise` | privacy/vector-noise-construction | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Measurement construction](#measurement-construction) and [source proof](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/noise/MakeNoise_IBig_for_RV.tex) |
+| `Sample for ZExpFamily<1>::sample` | correctness/shifted-discrete-laplace | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Shifted sampler trace](#shifted-sampler-trace) and [investigation](../../../../../investigations/cks20-discrete-laplace-normalization.md) |
+| `MakeNoise for RV::make_noise` | privacy/vector-noise-construction | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Measurement construction](#measurement-construction) and [source proof](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/noise/MakeNoise_IBig_for_RV.tex) |
 
 ## Analysis
 
