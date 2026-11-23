@@ -44,6 +44,12 @@ The public penalty is not necessarily arbitrary: in the source's formula, each m
 
 **Limitations:** A concrete constructed public `mbi.MarkovRandomField` and complete `AIM.make_marginals` integration remain to be executed. This is a source-level, conditional privacy-counterexample; the ordinary default penalty scale is much smaller. The separate [MST matrix-norm issue #117](https://github.com/opendp/opendp-audit/issues/117) does not cover the floating-point stability defect.
 
+### Native privacy-map violation with a real MBI model
+
+The source-equivalent penalty witness above has been strengthened by a **second** counterexample whose public noise penalty is just 4, while the public **MBI** model projection has a large total. [Successful CI](https://github.com/opendp/opendp-audit/actions/runs/45254507499) constructed finite model log-potentials and used `mbi`'s actual variable-elimination oracle to generate consistent pairwise and one-way projections, then invoked the real OpenDP `_make_aim_scores` and `_make_aim_select` via the published native nightly wheel. Its neighboring inputs passed `TypedDictDomain.member`; the compiled scorer returned `[-16,0]` score difference despite a map of 1, and both its `then_noisy_max(scale=4)` composition and the actual `_make_aim_select` declared `epsilon=0.5`. The resulting analytical two-candidate selection event has log likelihood ratio 4, exceeding this numeric certificate.
+
+The ordinary expected penalty of 4 arises from a valid public selection/measurement budget split `d_out=d_measure=0.5`, not an extreme small budget. A public model total around `2**55` is needed in this witness; end-to-end reachability through `make_contingency_table` re-estimation remains unverified. See [investigation](../../../../../../../investigations/aim-score-penalty-rounding-privacy.md), [native test](../../../../../../../tools/integration/mbi_public_model_score_native.py), and [issue #125](https://github.com/opendp/opendp-audit/issues/125).
+
 ## Next checks
 
 1. Native MBI integration test creating the stated consistent public model, two neighboring datasets, and AIM candidate selection with a sufficiently small permitted `measure_split`.
