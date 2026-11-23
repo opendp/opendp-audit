@@ -50,6 +50,14 @@ The source-equivalent penalty witness above has been strengthened by a **second*
 
 The ordinary expected penalty of 4 arises from a valid public selection/measurement budget split `d_out=d_measure=0.5`, not an extreme small budget. A public model total around `2**55` is needed in this witness; end-to-end reachability through `make_contingency_table` re-estimation remains unverified. See [investigation](../../../../../../../investigations/aim-score-penalty-rounding-privacy.md), [native test](../../../../../../../tools/integration/mbi_public_model_score_native.py), and [issue #125](https://github.com/opendp/opendp-audit/issues/125).
 
+### Context-level DP violation (native verification)
+
+[Successful native CI](https://github.com/opendp/opendp-audit/actions/runs/45256574552) now proves actual high-level `Context.compositor → query → contingency_table → release` reachability using the public prior-table reuse path and a deterministic, private-data-independent estimator accepted under `honest-but-curious`. Both neighboring Polars frames (`D0`: four 000 rows, `D1`: plus a 010 row) release successfully; output `ContingencyTable.marginals.cliques()` exposes the privately selected clique.
+
+The legitimate prior model has public, finite `mbi.MarkovRandomField` potentials; MBI variable elimination derives consistent synthetic projections at a public total around `2**55`. The nested native scorer's actual score delta is `[-8, 0]`, although its advertised sensitivity is **1**. Selection scale `4.000000000000002` yields an exactly computed, observable-event log likelihood ratio of **2.0**, exceeding the outer **epsilon = 1.0** certification. The offending event is release of clique `(A,)`, with probability `0.5` on D0 and `0.0676676416183064` on D1.
+
+This is a privacy violation for the documented public `Context.contingency_table` configuration with prior public table and a permitted HBC custom estimator, **not** a demonstrated defect for the default algorithm without table reuse. The output event ratios are analytic from actual native scorer values and the verified permute-and-flip implementation, rather than inferred from two randomized samples. See [full investigation](../../../../../../../investigations/aim-score-penalty-rounding-privacy.md), [issue #125](https://github.com/opendp/opendp-audit/issues/125), and [reproducible native Context test](../../../../../../../tools/integration/mbi_context_large_public_prior_native.py).
+
 ## Next checks
 
 1. Native MBI integration test creating the stated consistent public model, two neighboring datasets, and AIM candidate selection with a sufficiently small permitted `measure_split`.
