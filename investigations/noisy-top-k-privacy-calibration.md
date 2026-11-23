@@ -68,6 +68,16 @@ The deterministic tests covered:
 
 These tests do not analyze the exact distribution at extreme scales or guarantee arbitrary-precision rational conversion performance. The coverage remains **Partial** until the native backend is exercised and its directed-rounding contracts validated.
 
+### Unsized vector lengths and observable output cardinality
+
+**Question:** Is a privacy guarantee claimed for input vectors of different lengths under the accepted `LInfDistance` metric, and if so, what is their distance?
+
+The [vector domain implementation](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/domains/mod.rs) has `size: None` by default; membership iterates over actual entries and checks length only when `size` is set. The [metric-space compatibility check](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/metrics/mod.rs) rejects NaN elements but has no fixed-size requirement. The [constructor](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/noisy_top_k/mod.rs) checks `k > size` only for sized domains; unsized inputs can be shorter than `k`.
+
+The peeling loop runs `0..k.min(x.len())`, removes exactly one element on each **successful** iteration, and returns exactly that number of indices. Thus **the output length is deterministically `min(k, len(x))`**, for both selection modes and any scale or scores. An independent Python 3 source-semantics model iterated all `n=0..7`, `k=0..9`, both `negate` flags, and both `replacement` flags; all **320** cardinality assertions passed. This was **not** a native OpenDP execution. As a concrete example, with public `k=2`, `len(x)=1` forces output length 1, while `len(x')=2` forces output length 2. The resulting output distributions have disjoint support by length; if these inputs were assigned a finite `LInfDistance`, neither finite pure-DP nor finite zCDP could hold for that pair.
+
+**Crucial limitation:** The [`LInfDistance` proof definition](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/metrics/mod.rs) uses `max_i |x_i - x'_i|` and does **not** explicitly specify what happens when their lengths differ. It is not justified to assume that unequal-length vectors are finitely close (or that the distance is zero by padding). If cross-length pairs are not neighbors, the observable cardinality is compatible with the advertised privacy map. The source-level observation is confirmed; **no actual DP violation was established** and no defect issue is warranted. The next decisive check is to locate or formalize the length-compatibility condition in the metric's proof definition, or require a sized domain for a fixed public candidate count.
+
 ## Findings
 
 **No privacy-map or selection-distribution defect identified in the enumerated scope.** Do not generalize this negative result to arbitrary score domains, infinitesimal or extreme positive scales, all `alpha > 1`, or runtime behavior. The existing audit record for index rebasing remains separate. No candidate-defect issue was created, and no new audit-task lease was claimed.
@@ -76,5 +86,5 @@ These tests do not analyze the exact distribution at extreme scales or guarantee
 
 - Execute the native OpenDP test suite and implement deterministic distributional regression tests where practical.
 - Prove/calibrate the monotonic range-distance conversion and zCDP bound over all allowed score types and scales without relying on a finite test model; examine the directed-rounding arithmetic for extreme values.
-- Clarify the valid `LInfDistance` adjacency interpretation for unsized vectors and any effect of observable vector length. The model held the length fixed.
+- Specify the finite-distance/adjoining relation for `LInfDistance` on unequal-length vectors. If any such pairs are claimed to be close, reassess the deterministic cardinality disclosure; if not, explicitly record that differing input lengths are not neighbors.
 - Re-review if sampler or privacy-map implementations change on upstream `main`.

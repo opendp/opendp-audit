@@ -20,6 +20,7 @@ updated: 2026-11-22
 | `measurements::noisy_top_k::peel_permute_and_flip` | correctness/index-rebasing | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Proof and exhaustive model](#analysis) |
 | `measurements::noisy_top_k::permute_and_flip` | correctness/selected-index-range | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Selection branch inspection](#analysis) |
 | `measurements::noisy_top_k::make_noisy_top_k` | privacy/calibration | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Distribution and calibration investigation](../../../../../investigations/noisy-top-k-privacy-calibration.md) |
+| `measurements::noisy_top_k::make_noisy_top_k` | privacy/length-observability | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Unsized length analysis](../../../../../investigations/noisy-top-k-privacy-calibration.md#unsized-vector-lengths-and-observable-output-cardinality) |
 | `measurements::noisy_top_k::permute_and_flip` | privacy/selection-distribution | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Two sampling modes](../../../../../investigations/noisy-top-k-privacy-calibration.md) |
 | `measurements::noisy_top_k::TopKMeasure::privacy_map (MaxDivergence)` | privacy/calibration | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Pure-DP comparison](../../../../../investigations/noisy-top-k-privacy-calibration.md) |
 | `measurements::noisy_top_k::TopKMeasure::privacy_map (ZeroConcentratedDivergence)` | privacy/calibration | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [zCDP comparison](../../../../../investigations/noisy-top-k-privacy-calibration.md) |
@@ -46,8 +47,14 @@ The [cross-file investigation](../../../../../investigations/noisy-top-k-privacy
 
 An [extended finite reference model](../../../../../investigations/noisy-top-k-privacy-calibration.md#extended-numerical-calibration-model-subnormals-and-overflow) checked the constructor's directed-rounding algebra using exact `Fraction` arithmetic and upward binary64 rounding, including subnormals, near-overflow scales, and `k > 2^53`. Of **43,680** deterministic edge/random combinations, **33,298** reference-model outputs were representable and conservative with respect to exact rational formulas, **10,382** were classified as unrepresentable model arithmetic errors, and **none** underestimated the ideal privacy bound. This validates only the independent **rounding reference model**, not OpenDP's executed `FBig` backend or runtime sampling. The privacy calibration coverage remains **Partial**.
 
+### Unsized input length and output cardinality
+
+The [length-adjacency analysis](../../../../../investigations/noisy-top-k-privacy-calibration.md#unsized-vector-lengths-and-observable-output-cardinality) verified from the Rust loop bound that every successful output contains exactly `min(k, input.len())` indices. For `VectorDomain::new(...)` without `with_size`, the domain accepts several vector lengths, and the compatibility check for `LInfDistance` checks non-NaN elements but does not require a fixed length. Consequently, `k = 2` deterministically distinguishes an input of length one from an input of length two through the **number** of emitted indices, regardless of scores, scale, and privacy measure.
+
+This establishes output-length observability, **not** a confirmed privacy-accounting defect: the documented `LInfDistance` formula does not explicitly define finite closeness between different-length vectors, so no neighboring unequal-length pair has been proven. The new coverage row remains **Partial** pending clarification of the cross-length metric relation and its proof assumptions. An independent Python source-semantics model checked the cardinality formula in **320** cases; no compiled Rust test was run.
+
 ## Next checks
 
 - Run the native Rust regression suite for this module when a runnable upstream checkout is available.
-- Extend the privacy-map and selection-distribution review beyond finite small-vector models and resolve the assumptions on unsized input domains.
+- Extend the distributional review beyond finite small-vector models; obtain an explicit formal interpretation of `LInfDistance` for different-length vectors, or restrict the relevant privacy claim to a fixed public length.
 - Re-review if the index-removal logic or sampler contracts change materially.
