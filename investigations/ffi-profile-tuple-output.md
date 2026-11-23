@@ -26,7 +26,13 @@ An output typed `(PrivacyProfile, f64)` should roundtrip from the Rust privacy m
 4. Python's specialized `_slice_to_tuple` receives the profile clone as an owning `AnyObjectPtr`. The returned `PrivacyProfile` keeps that pointer alive and `AnyObjectPtr.__del__` eventually frees it. The two *other* allocations, the boxed `f64` and pointer array, are only read and never reclaimed. Their leak is not repaired by `slice_free`.
 5. [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) changes the Rust special encoder to retain the profile clone in a scoped `FfiSliceOwner` and borrow the `f64` from the source. Its revised Python decoder calls `c_to_py` on a borrowed profile pointer, causing an independent clone to escape. This addresses the scratch ownership if properly integrated. However, the [PR's R converter](https://github.com/opendp/opendp/blob/bccc2aeb6e38ac5b2ad7894eae8fa441080d8119/R/opendp/src/convert.c) still calls `voidptr_to_sexp` on all tuple members and does not implement `PrivacyProfile` decoding. The R functional finding therefore remains unaddressed by the examined draft.
 
-**Executed:** GitHub source tracing, type dispatch and allocation/destructor review, and inspection of the unmerged PR implementation and test sources. No compiled OpenDP R or Python tests, Valgrind, AddressSanitizer, or dynamic privacy-map invocation were run.
+**Executed:** GitHub source tracing, type dispatch and allocation/destructor review, inspection of the unmerged PR implementation, and a compiler-backed C-shim dispatch witness. No genuine OpenDP R or Python runtime tests, Valgrind, AddressSanitizer, or dynamic privacy-map invocation were run.
+
+### Executable C-shim dispatch witness
+
+The [pinned C fixture](../tools/tests/r_ffi_nested_tuple_dispatch.c) embeds the unmodified bodies of `voidptr_to_sexp`, `slice_to_tuple`, and `slice_to_sexp` from the reviewed upstream commit, compiled against a minimal **test-only R API stub** by the [unittest driver](../tools/tests/test_r_ffi_nested_tuple_dispatch.py). It executes four inputs: a successful `(f64, f64)` control; `(PrivacyProfile, f64)` triggering `voidptr_to_sexp unknown type: PrivacyProfile`; nonempty `Option<(f64, AnyObject)>` triggering `voidptr_to_sexp unknown type: AnyObject`; and an empty Option returning the stub `R_NilValue`.
+
+The C-shim unit-test step and repository validation passed in [GitHub Actions run 45099985874](https://github.com/opendp/opendp-audit/actions/runs/45099985874). **This is not an R runtime or OpenDP integration reproduction.** It isolates C dispatch with stand-in R types; the production type parsing, FFI constructor, memory lifetime, R's nonlocal exception handling, and user-facing error text remain unverified by this executable witness.
 
 ## Findings
 

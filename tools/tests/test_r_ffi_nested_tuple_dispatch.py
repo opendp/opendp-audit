@@ -7,6 +7,7 @@ ef1a238634d6196b01a1a1e77d3d5ad2340e3094.
 """
 
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +18,8 @@ class TestRFFINestedTupleDispatch(unittest.TestCase):
     def test_pinned_c_decoder_dispatch(self):
         compiler = shutil.which("cc")
         if compiler is None:
+            if os.getenv("CI"):
+                self.fail("C compiler required in CI to execute the pinned decoder witness")
             self.skipTest("C compiler not installed")
 
         src = Path(__file__).with_name("r_ffi_nested_tuple_dispatch.c")

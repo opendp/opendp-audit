@@ -40,7 +40,13 @@ R's generic `slice_to_sexp` has no `Function` case. Public reachability of a gen
 
 [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) (reviewed at `bccc2aeb6e38ac5b2ad7894eae8fa441080d8119`) places optional tuple pointer arrays under a typed `FfiSliceOwner` and provides direct `opendp_data__clone_function` output for Python. The PR remains unmerged. Its [R tuple decoder](https://github.com/opendp/opendp/blob/bccc2aeb6e38ac5b2ad7894eae8fa441080d8119/R/opendp/src/convert.c) still delegates each member to `voidptr_to_sexp` without `AnyObject` support.
 
-**Executed:** Pinned Rust/R/Python source review, draft PR comparison, and one standalone opaque-pointer `ctypes` address check. **Not executed:** compiled OpenDP binding tests, native leak checking, sanitizer runs, or destructor-count instrumentation. The R decoder defect is tracked in [audit issue #8](https://github.com/opendp/opendp-audit/issues/8); no upstream issue or PR was created by this audit.
+**Executed:** Pinned Rust/R/Python source review, draft PR comparison, one standalone opaque-pointer `ctypes` address check, and a compiler-backed C-shim dispatch witness. **Not executed:** genuine compiled OpenDP binding tests, native leak checking, sanitizer runs, or destructor-count instrumentation. The R decoder defect is tracked in [audit issue #8](https://github.com/opendp/opendp-audit/issues/8); no upstream issue or PR was created by this audit.
+
+### Executable C-shim dispatch witness
+
+The [pinned C fixture](../tools/tests/r_ffi_nested_tuple_dispatch.c) embeds the unmodified bodies of `voidptr_to_sexp`, `slice_to_tuple`, and `slice_to_sexp` from the reviewed upstream commit, compiled against a minimal **test-only R API stub** by the [unittest driver](../tools/tests/test_r_ffi_nested_tuple_dispatch.py). It executes four inputs: a successful `(f64, f64)` control; `(PrivacyProfile, f64)` triggering `voidptr_to_sexp unknown type: PrivacyProfile`; nonempty `Option<(f64, AnyObject)>` triggering `voidptr_to_sexp unknown type: AnyObject`; and an empty Option returning the stub `R_NilValue`.
+
+The C-shim unit-test step and repository validation passed in [GitHub Actions run 45099985874](https://github.com/opendp/opendp-audit/actions/runs/45099985874). **This is not an R runtime or OpenDP integration reproduction.** It isolates C dispatch with stand-in R types; the production type parsing, FFI constructor, memory lifetime, R's nonlocal exception handling, and user-facing error text remain unverified by this executable witness.
 
 ## Findings
 
