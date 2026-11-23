@@ -1,0 +1,30 @@
+name: Verify AIM and MST score rounding with native MBI
+
+on:
+  push:
+    paths:
+      - '.github/workflows/mbi-public-model-score-native.yml'
+      - 'tools/integration/mbi_public_model_score_native.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-mbi-scores:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      XLA_FLAGS: '--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=2'
+      JAX_ENABLE_X64: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install native OpenDP and pinned MBI
+        run: |
+          python -m pip install 'opendp==0.16.0a20261122001' 'mbi==2.0.0' 'numpy==2.3.5'
+      - name: Execute native AIM and MST MBI scorer and privacy-map tests
+        run: |
+          python -u tools/integration/mbi_public_model_score_native.py
