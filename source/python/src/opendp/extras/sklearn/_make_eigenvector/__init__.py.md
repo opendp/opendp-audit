@@ -8,7 +8,7 @@ updated: 2026-11-23
 
 ## Scope and assumptions
 
-- **Additional independent audit scope:** Contractivity and mutable snapshot of `make_np_sscp_projection`, distinct from the existing negative-epsilon review; traced to SSCP and eigenvalue stability.
+- **Additional independent audit scope:** Review the documented contractivity precondition and parameter snapshot behavior of the internal `make_np_sscp_projection` helper; separate from the negative-epsilon privacy finding.
 
 - **Audit scope:** `make_private_eigenvector` public `unit_epsilon` validation, privacy callback, and the ability of the Bingham sampler to depend on private input with negative epsilon; `make_private_eigenvectors` examined only to trace entrypoint exposure.
 - **Invariants:** Valid `MaxDivergence` privacy maps must be nonnegative and conservative. Parameter values that undermine this guarantee must be rejected before a Measurement is returned.
@@ -23,7 +23,7 @@ updated: 2026-11-23
 | `sklearn._make_eigenvector.make_private_eigenvector` | privacy/distribution-bound | Partial | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Distribution witness](#analysis); [cross-file investigation](../../../../../../../investigations/sklearn-eigenvector-negative-epsilon.md) |
 | `sklearn._make_eigenvector.make_private_eigenvectors` | privacy/entrypoint-budget-validation | Partial | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Entries passed to nested eigenvector constructors](#analysis) |
 
-| `sklearn._make_eigenvector.make_np_sscp_projection` | privacy/projection-contractivity | Partial | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Unchecked operator norm](#projection-contractivity-and-mutability); [defect #110](https://github.com/opendp/opendp-audit/issues/110) |
+| `sklearn._make_eigenvector.make_np_sscp_projection` | privacy/projection-contractivity | Partial | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Documented trusted-caller precondition](#projection-contractivity-and-mutability); [reclassified #110](https://github.com/opendp/opendp-audit/issues/110) |
 | `sklearn._make_eigenvector.make_np_sscp_projection` | correctness/projection-snapshot | Audited | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Mutable reference capture](#projection-contractivity-and-mutability); [upstream PR #3281](https://github.com/opendp/opendp/pull/3281) |
 
 ## Analysis
@@ -46,11 +46,11 @@ For one-row, one-feature bounded datasets `X=[[0.]]` and `X'=[[1.]]` (row norm a
 
 **Threat-model limitation:** `P` is documented as a projection whose singular values are at most one, and the built-in PCA caller constructs identity/null-space projection matrices. This is a conditional invalid stability certificate when the underscored helper is given a matrix violating the stated precondition, not evidence that default PCA releases are unsafe. The mutable-array variant can start from a *valid* `P` and then violate its contract after construction.
 
-**Disposition:** [Issue #110](https://github.com/opendp/opendp-audit/issues/110) tracks the missing contractivity check. [Open upstream PR #3281](https://github.com/opendp/opendp/pull/3281) adds `np.array(P, copy=True)` to prevent aliasing, but explicitly documents that operator-norm contractivity remains an unchecked precondition. The [cross-file investigation](../../../../../../../investigations/pca-sscp-projection-contractivity.md) records the full reasoning and next proof obligations. **Status: Partial** for the cross-file privacy property and **Audited** for the mutable capture demonstrated directly in this file.
+**Disposition (corrected):** The lack of an operator-norm check is **not a privacy defect**: this helper is internal, its docstring explicitly requires a contraction (`||P||_2 <= 1`), and the built-in PCA call path supplies identity/null-space projections satisfying that condition in exact arithmetic. `P=2I` is an invalid call, not a counterexample to the helper's specified contract. [Issue #110](https://github.com/opendp/opendp-audit/issues/110) is closed as not an independently actionable vulnerability. The mutable-reference capture is a distinct construction-boundary hardening issue already addressed by [open upstream PR #3281](https://github.com/opendp/opendp/pull/3281), which snapshots `P`. The [cross-file investigation](../../../../../../../investigations/pca-sscp-projection-contractivity.md) preserves the conditional arithmetic demonstration and this reclassification. **Status: Partial** because native PCA execution and floating-point preservation of contractivity were not verified; **Audited** for observing the original mutable capture.
 
 ## Next checks
 
-- Execute a native OpenDP regression for expansive `P=2I`; decide whether the underscored helper's documented norm bound must be checked or may remain caller-trusted, and verify PR #3281's snapshot fix.
+- Verify PR #3281's snapshot fix by native test; separately assess whether floating-point null-space projections preserve the stated norm precondition within a justified numerical bound. There is no requirement to accept or handle `P=2I` in this internal helper.
 
 - Run a native-library Python regression for `make_private_eigenvector(-0.2)` and `.map(2)`, then test construction-time rejection after patch.
 - Check the sign/finite-value validation of structured `PCAEpsilons` and `make_private_eigenvectors` paths.
