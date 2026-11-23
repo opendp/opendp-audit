@@ -58,6 +58,14 @@ The legitimate prior model has public, finite `mbi.MarkovRandomField` potentials
 
 This is a privacy violation for the documented public `Context.contingency_table` configuration with prior public table and a permitted HBC custom estimator, **not** a demonstrated defect for the default algorithm without table reuse. The output event ratios are analytic from actual native scorer values and the verified permute-and-flip implementation, rather than inferred from two randomized samples. See [full investigation](../../../../../../../investigations/aim-score-penalty-rounding-privacy.md), [issue #125](https://github.com/opendp/opendp-audit/issues/125), and [reproducible native Context test](../../../../../../../tools/integration/mbi_context_large_public_prior_native.py).
 
+### Native Context failure with a public model total of two
+
+The original extreme **public expected-noise penalty**, not only a huge public model projection, also causes a **fully executed Context pure-DP violation**. [Successful native CI](https://github.com/opendp/opendp-audit/actions/runs/45261341996) creates a real MBI model with `total=2`, 65 public categories per column, and real variable-elimination projections `A=[1,1,0,...]` and `B=[2,0,0,...]`. A public `AIM` algorithm uses `rounds=1`, `oneway_split=0`, `measure_split=65/float(2**54+8)`, and a deterministic `honest-but-curious` estimator. Both neighboring private frames execute `Context.compositor→query(epsilon=1)→contingency_table(table=public_table)→release` successfully.
+
+The score difference is `[4,0]` rather than certified 1. Native selection scale is approximately 2.000000000000008. An observable `('B',)` selection has probabilities `0.5` and `0.06766764161830689` on neighboring frames, yielding **log ratio 2 > advertised epsilon 1**. This avoids the large-public-total precondition of the previous Context witness, though the extreme positive `measure_split≈3.608224830031757e-15` is still necessary. The returned table reveals selected cliques directly. See [investigation](../../../../../../../investigations/aim-score-penalty-rounding-privacy.md) and [regression](../../../../../../../tools/integration/mbi_aim_small_total_large_penalty_native.py).
+
+The initially smaller 3- and 9-category probes reproduced the native internal selector gap but failed during high-level *count noise* parameter search due to the independently documented `f64` search horizon `2**49`, [audit #102](https://github.com/opendp/opendp-audit/issues/102). The 65-cell workload reduces the necessary per-cell scale below that search horizon without changing the score penalty.
+
 ## Next checks
 
 1. Native MBI integration test creating the stated consistent public model, two neighboring datasets, and AIM candidate selection with a sufficiently small permitted `measure_split`.
