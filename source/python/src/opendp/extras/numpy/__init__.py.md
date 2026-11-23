@@ -31,6 +31,8 @@ updated: 2026-11-23
 
 **Limitations:** Ordinary `make_np_sscp` applied to valid bounded raw data produces matrices satisfying the intended bound; this audit does not establish a privacy loss in the standard PCA pipeline. It establishes the membership contract defect and its possible direct-constructor privacy consequence. Enforcing only trace is a necessary but not necessarily sufficient domain repair, particularly when `rank(C) > size`.
 
+**Pending upstream resolution:** [PR #3281](https://github.com/opendp/opendp/pull/3281) (draft, base `sklearn-pca`, head `01cd7460894ebfade7066750e9a4b9313278cf42`) removes the problematic latent bounds by replacing `_sscp_domain` with a general finite symmetric matrix domain and nuclear-norm metric. `make_eigenvalues` then has an identity stability map; the counterexample matrices are distance 16 instead of 2. This covers the reported root cause but has not merged into `main`.
+
 **Related:** [Audit #115](https://github.com/opendp/opendp-audit/issues/115) tracks the membership defect. [Audit #110](https://github.com/opendp/opendp-audit/issues/110) concerns the separate projection contract; upstream [#2952](https://github.com/opendp/opendp/issues/2952) concerns nonzero origins in `make_np_sscp`.
 
 ## Next checks
