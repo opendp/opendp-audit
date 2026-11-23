@@ -1,3 +1,10 @@
+---
+schema_version: 1
+upstream_commit: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
+updated: 2026-11-23
+status: Partial
+---
+
 # Nullable `SeriesDomain::member` examines physical payloads of null slots
 
 ## Revisions and scope
