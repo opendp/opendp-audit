@@ -17,16 +17,17 @@ updated: 2026-11-22
 
 - **Additional audit scope:** The Python `Vec<String>` result consumer: whether decoded `str` values close Rust-owned backing allocations. This is separate from the prior `Vec<AnyObject>` helper leak.
 
+- **Additional audit scope:** Composite output conversion in `_slice_to_tuple` and `_slice_to_hashmap`: lifetime of the Rust scratch pointer arrays and temporary `HashMap` child `AnyObject` values, independent of the outer descriptor.
+
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
 | `_slice_to_vector` | memory/temporary-slice-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Cross-file investigation](../../../../investigations/ffi-vector-slice-lifetime.md) |
-
 | `_slice_to_string` | correctness/ffi-scalar-string-layout | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Scalar String layout](#scalar-string-pointer-layout): dereferences `FfiSlice.ptr` as `char **` although the scalar Rust producer returns `char *` |
-
 | `_slice_to_vector` | memory/string-vector-backing-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Backing allocations](#vecstring-backing-ownership): decodes `Vec<String>` data but does not reclaim Rust-owned buffers |
-
+| `_slice_to_tuple` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../investigations/ffi-composite-output-ownership.md) |
+| `_slice_to_hashmap` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../investigations/ffi-composite-output-ownership.md) |
 ## Analysis
 
 ### `_slice_to_vector` — `memory/temporary-slice-ownership`
@@ -59,6 +60,16 @@ updated: 2026-11-22
 
 **Related:** [Cross-language investigation](../../../../investigations/ffi-string-vector-backing-ownership.md); [draft PR #3179](https://github.com/opendp/opendp/pull/3179).
 
+### Composite output backing ownership
+
+**Conclusion:** Python's tuple/map decoders copy values from Rust-owned composite scratch views without releasing their backing allocations. In particular, `_slice_to_hashmap` deliberately treats its nested key/value `AnyObject` pointers as borrowed, so their Rust-created wrappers remain unclaimed and unfreed on the legacy producer path.
+
+**Evidence:** `_slice_to_tuple` interprets `raw.contents.ptr` as `POINTER(c_void_p)`, copies the addresses to a Python list, and reads the referenced scalar fields. `_slice_to_hashmap` casts the pointer array to `POINTER(POINTER(AnyObject))` and reads each via `c_to_py`. The `ctypes.POINTER(AnyObject)` values do not have the `AnyObjectPtr` destructor. The Rust producer allocated the tuple pointer array with `util::into_raw([..])`, and the map child wrappers and pointer vector with `util::into_raw`. The `c_to_py` `finally` block frees only the enclosing `FfiSlice` descriptor, whose destructor explicitly does not free the pointee.
+
+**Negative findings and limits:** The Python code avoids prematurely freeing pointers that may originate from a Python-owned input slice; ownership cannot safely be inferred solely from the inner `ctypes` type. The defect is instead the legacy Rust output producer's absence of an owner for its detached scratch allocations. No dynamic OpenDP test or native allocation measurement was executed, and specialized tuple payloads were not audited.
+
+**Related:** [Cross-language investigation](../../../../investigations/ffi-composite-output-ownership.md); [pending draft PR #3179](https://github.com/opendp/opendp/pull/3179).
+
 ## Next checks
 
 Run a native conversion loop with allocation instrumentation, then verify that the eventual merged ownership implementation reclaims both the view header and pointer-array storage, including conversion errors.
@@ -66,3 +77,5 @@ Run a native conversion loop with allocation instrumentation, then verify that t
 - Follow the [Cross-language scalar string layout investigation](../../../../investigations/ffi-scalar-string-layout.md) and run scalar `String` outputs through a compiled, sanitizer-enabled binding before marking this pointer-layout concern resolved.
 
 - Validate that the eventual merged `FfiSliceOwner` reclaims `Vec<String>` C strings and the pointer array after successful and exceptional conversions; add native-allocation regression measurements.
+
+- Verify composite scratch-buffer cleanup under a native allocation checker after PR #3179 is merged; separately test normal conversions and failures.

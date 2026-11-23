@@ -18,6 +18,8 @@ updated: 2026-11-22
 
 - **Additional audit scope:** Legacy `object_as_slice` handling of `Vec<String>`, including ownership of each exported C string and the pointer-array backing. It is distinct from the separately audited scalar-string pointer shape and the outer descriptor.
 
+- **Additional audit scope:** Scratch ownership of tuple pointer arrays and `HashMap` output wrappers created by `opendp_data__object_as_slice`, as consumed by R and Python. Element representation, privacy properties, and special tuple payloads are excluded.
+
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
@@ -26,11 +28,12 @@ updated: 2026-11-22
 | `opendp_data__slice_free` | memory/temporary-slice-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Cleanup contract](../../../../../investigations/ffi-vector-slice-lifetime.md) |
 | `opendp_data__object_as_slice` | memory/ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Descriptor analysis](#opendp_data__object_as_slice-and-opendp_data__slice_free--memoryownership): successful result transfers an owned descriptor to the caller |
 | `opendp_data__slice_free` | memory/ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Descriptor analysis](#opendp_data__object_as_slice-and-opendp_data__slice_free--memoryownership): frees the outer descriptor only |
-
 | `opendp_data__object_as_slice::string_to_raw` | correctness/ffi-scalar-string-layout | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Scalar String layout](#scalar-string-pointer-layout): returns a direct `char *` where both binding readers expect `char **` |
-
 | `opendp_data__object_as_slice::vec_string_to_raw` | memory/string-vector-backing-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Backing allocations](#vecstring-backing-ownership): exported CString buffers and pointer array lack a release path |
-
+| `opendp_data__object_as_slice::tuple2_to_raw` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../../investigations/ffi-composite-output-ownership.md) |
+| `opendp_data__object_as_slice::option_tuple2_to_raw` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../../investigations/ffi-composite-output-ownership.md) |
+| `opendp_data__object_as_slice::tuple3_l0Pinf_distance_to_raw` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../../investigations/ffi-composite-output-ownership.md) |
+| `opendp_data__object_as_slice::hashmap_to_raw` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../../investigations/ffi-composite-output-ownership.md) |
 ## Analysis
 
 ### Native helper and cleanup — `memory/temporary-slice-ownership`
@@ -74,6 +77,18 @@ updated: 2026-11-22
 
 **Related:** [Cross-language investigation](../../../../../investigations/ffi-string-vector-backing-ownership.md); [draft PR #3179](https://github.com/opendp/opendp/pull/3179) introduces `FfiSliceOwner` with owned strings and a kept-alive pointer vector, but remains unmerged.
 
+### Composite output backing ownership
+
+**Conclusion:** On the pinned upstream `main`, the ordinary tuple output paths allocate small arrays containing borrowed field pointers through `util::into_raw([..])`. Nothing frees these arrays after they are copied by R or Python. The `HashMap` branch separately allocates two cloned `AnyObject` key/value vectors and a pointer-array vector, then relinquishes ownership of all three. Its cloned payload allocations remain unreclaimed. The leaks are resource-management defects, not demonstrated privacy-accounting failures.
+
+**Evidence:** `tuple2_to_raw`, the `Some` branch of `option_tuple2_to_raw`, and `tuple3_l0Pinf_distance_to_raw` pass a boxed raw array of two or three field addresses directly as `FfiSlice.ptr`. The `None` option branch returns a null pointer and length zero, so does not allocate a scratch array. `hashmap_to_raw` clones keys and values into new `AnyObject` instances; `util::into_raw(keys)` and `util::into_raw(vals)` each transfer ownership to a raw pointer. The vector of those pointers is additionally passed to `util::into_raw(map)` after `map.as_ptr()` is exported. `util::into_raw` implements `Box::into_raw(Box::new(...))` ([pinned source](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/ffi/util.rs#L458-L466)). The available `slice_free` reclaims the outer `FfiSlice` only, not its pointer array or child objects ([pinned source](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/data/ffi/mod.rs#L936-L950)).
+
+**Consumer contract:** R's `slice_to_tuple` reads the field pointers and `slice_to_hashmap` converts the key/value objects; Python's `_slice_to_tuple` copies pointed-to values while `_slice_to_hashmap` reads `ctypes.POINTER(AnyObject)` borrowed child pointers. Neither binding releases these Rust-owned scratch allocations. The `HashMap` result is reconstructed from keys/values, but that copying does not transfer the scratch allocation ownership.
+
+**Negative findings and limits:** A tuple `None` option branch has no pointer-array allocation. Borrowed field pointers into the source tuple are not themselves owned by these arrays and must not be independently freed. This audit does not claim all tuple *element types* have correct layouts, nor audit special `PrivacyProfile` tuple branches, error handling for all transitive sub-conversions, or runtime leak magnitude. No OpenDP native execution occurred.
+
+**Related:** [Cross-language investigation](../../../../../investigations/ffi-composite-output-ownership.md). [Pending draft PR #3179](https://github.com/opendp/opendp/pull/3179) introduces `FfiSliceOwner::pointers`, which keeps the array alive and frees it on owner destruction, and `owner.keep` for `HashMap` key/value children.
+
 ## Next checks
 
 - Check the eventual merged code and native regression tests for complete release of pointer-array storage under both success and error conditions.
@@ -82,3 +97,5 @@ updated: 2026-11-22
 - Follow the [Cross-language scalar string layout investigation](../../../../../investigations/ffi-scalar-string-layout.md) and run scalar `String` outputs through a compiled, sanitizer-enabled binding before marking this pointer-layout concern resolved.
 
 - Validate that the eventual merged `FfiSliceOwner` reclaims `Vec<String>` C strings and the pointer array after successful and exceptional conversions; add native-allocation regression measurements.
+
+- Verify composite scratch-buffer cleanup under a native allocation checker after PR #3179 is merged; separately test normal conversions and failures.
