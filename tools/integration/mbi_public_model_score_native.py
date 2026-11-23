@@ -27,15 +27,21 @@ def model_with_concentrated_public_joint():
     domain = mbi.Domain.fromdict({"A": 2, "B": 2, "C": 2})
     joint = np.zeros(domain.shape, dtype=np.float64)
     joint[0, 0, 0] = TOTAL
-    # An actual JAX/MBI model, not a fake object with a project method.
-    potentials = mbi.CliqueVector.zeros(domain, [("A", "B", "C")])
-    marginal_vector = mbi.CliqueVector(
-        domain,
-        [("A", "B", "C")],
-        {("A", "B", "C"): mbi.Factor(domain, joint)},
+    # Construct an actual normalized model from finite log-potentials.
+    # In binary64, exp(-1000) underflows to zero, so its projections are
+    # exactly concentrated in the zero cell. Do NOT inject synthetic
+    # marginals inconsistent with the model's potentials.
+    log_potentials = np.full(domain.shape, -1000.0, dtype=np.float64)
+    log_potentials[0, 0, 0] = 0.0
+    potentials = mbi.CliqueVector(
+        domain, [("A", "B", "C")],
+        {("A", "B", "C"): mbi.Factor(domain, log_potentials)},
     )
+    # Empty stored marginals forces MBI's real variable-elimination oracle.
     model = mbi.MarkovRandomField(
-        potentials=potentials, marginals=marginal_vector, total=TOTAL
+        potentials=potentials,
+        marginals=mbi.CliqueVector(domain, [], {}),
+        total=TOTAL,
     )
     assert isinstance(model, mbi.MarkovRandomField)
     for edge in EDGES:
