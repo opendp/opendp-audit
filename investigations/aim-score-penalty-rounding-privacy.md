@@ -104,3 +104,26 @@ The native full `AIM.make_marginals` release counterexample with an ordinary pen
 2. For the separate original huge-penalty witness, establish that all required AIM nested budget searches permit the very small public `measure_split`.
 3. Examine conservative `float64` error bounds for subtraction, overflow/underflow, and `model.project` values, then select an implementable mitigation that does not understate sensitivity.
 4. Review final upstream PRs for a fix before resolving #125.
+
+## Context-level executable pure-DP violation (native verified)
+
+The original investigation's high-level reachability question is **resolved for the explicitly supported public prior-table reuse path**. A complete high-level `Context.compositor(...).query(epsilon=1).select("A","B","C").contingency_table(table=public_table, algorithm=AIM(...)).release()` succeeded on **both** neighboring private inputs in a published OpenDP native wheel.
+
+**Native evidence:** [successful exact-event CI run](https://github.com/opendp/opendp-audit/actions/runs/45256574552) with `opendp==0.16.0a20261122001`, `mbi==2.0.0`, `polars==1.36.1`, `numpy==2.3.5`; [executable context regression](../tools/integration/mbi_context_large_public_prior_native.py) and [CI workflow](../.github/workflows/mbi-context-large-model-native.yml).
+
+The public `ContingencyTable` has no prior private marginals (`Marginals()`), keys `[0,1,None]` for each of A/B/C, and a genuine MBI `MarkovRandomField` with `total=float(2**55+16)`, finite log potentials 0 at `000` and -1000 for all other states, and empty stored marginals (forcing the actual MBI variable-elimination inference). The deterministic estimator always returns that same public model without inspecting private data; OpenDP's `honest-but-curious` feature explicitly permits this extension. The model is public and identical on both neighbors. `oneway_split=0` disables unneeded initial key/total discovery, and `measure_split=0.5` gives each of selection and count measurement half the pure-DP budget. AIM uses `rounds=1`, `queries=[Count(('A',)),Count(('B',))]`.
+
+The private datasets are `D0 = [(0,0,0)] * 4` and `D1 = D0 + [(0,1,0)]` as `UInt32`-typed lazy frames. They are one insertion apart under `FrameDistance<SymmetricDistance>` and bound `d_in=[Bound(per_group=1)]`; frame schema and every input row match the public bounds (the native `LazyFrameDomain.member` API is deliberately unavailable under `polars-ffi`). The test also checks the indexed marginal dictionaries against their actual `TypedDictDomain.member`.
+
+The source-equivalent `_make_aim_scores` score vector, computed by native OpenDP after its actual MBI model projections, changes by `[-8.0, 0.0]` whereas the transformation privacy/stability map returns **1**. With selection privacy allowance just below `0.5`, native binary search calibrates permute-and-flip scale to `4.000000000000002`. The exact event that the selected clique is `('A',)` has:
+
+- `Pr[event | D0] = 0.5`
+- `Pr[event | D1] = 0.0676676416183064`
+- `ln(Pr[event | D0] / Pr[event | D1]) = 1.9999999999999991`.
+
+The event probabilities were computed analytically by enumerating all candidate permutations and acceptance probabilities from the **actual native score vectors** (rather than estimating the ratio from randomized trial counts). This log ratio **exceeds the entire context's advertised epsilon = 1**. The context `release()` returns a `ContingencyTable` whose `marginals.cliques()` contains the selected marginal, making this event directly observable even after the subsequent private count release and deterministic model refit.
+
+**Finding:** A *fully executed, supported high-level Context API* measurement can violate its reported pure-DP guarantee when a large **public** prior model is reused with a public deterministic estimator under `honest-but-curious`. This result is not a proof that the default model-fitting workflow without a prior table is vulnerable. A complete native run's random selected cliques by themselves do not estimate probabilities; the analytic source-backed probabilities establish the mismatch. The public model's unusual magnitude is permitted by the tested API configuration but uncommon in ordinary data analysis.
+
+**Remediation:** Bound actual numerical error in `exact - synth`, norm reduction and (for AIM) penalty subtraction in the reported score stability; test with large but finite public models and exact-binary64 spacing. Fixing only the selection mechanism's nominal scale calculation would leave the score transformation contract false.
+
