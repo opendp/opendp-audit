@@ -37,3 +37,20 @@ fn expected_real_arithmetic_leaves_are_finite() {
     assert!(exact_leaf_reference.is_finite());
     assert!((exact_leaf_reference as f32).is_finite());
 }
+
+#[test]
+fn f64_max_to_f64_returns_nan_leaves_in_pinned_opendp() -> Fallible<()> {
+    // This variant bypasses an integer-to-f32 cast: even f64 intermediate
+    // child sums overflow, although each mathematically projected leaf is
+    // (2/3)*f64::MAX, which is finite.
+    let expected_leaf = f64::MAX * (2.0 / 3.0);
+    assert!(expected_leaf.is_finite());
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    let leaves = post.eval(&vec![f64::MAX; 3])?;
+    assert_eq!(leaves.len(), 2);
+    assert!(
+        leaves.iter().all(|x| x.is_nan()),
+        "original pinned implementation unexpectedly changed: {leaves:?}"
+    );
+    Ok(())
+}
