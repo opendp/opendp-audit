@@ -29,8 +29,8 @@ updated: 2026-11-22
 
 **Limitations:** Other alpha-search regimes, conservative rounding of the final certificate, and the actual upstream Rust error variant remain untested. The scope does not claim universal completion for every finite input. See [investigation](../../../../../../../investigations/zcdp-small-rho-bound-overflow.md).
 
-**Related:** Historical upstream [issue #1997](https://github.com/opendp/opendp/issues/1997) concerns a *different* underflow defect and was closed. Upstream [PR #2849](https://github.com/opendp/opendp/pull/2849) was closed unmerged and is not a current fix.
+**Related:** Open draft [upstream PR #2868](https://github.com/opendp/opendp/pull/2868) replaces this converter and explicitly catches `ErrorVariant::Overflow` in the alpha upper-bound heuristic, falling back to `alpha=2`. This is a **pending fix**, not merged into reviewed `main`. Historical upstream [issue #1997](https://github.com/opendp/opendp/issues/1997) concerns a different underflow defect; [PR #2849](https://github.com/opendp/opendp/pull/2849) was closed unmerged.
 
 ## Next checks
 
-Run `cdp_delta(1e-310, 1.0)` in a compiled Rust test, assert the returned error type, and test an explicit finite-alpha fallback without weakening the conservative bound. Recheck open issues and fix PRs before any new candidate issue.
+Run the exact `rho=1e-310, eps=1.0` witness on current `main` and on draft PR #2868, checking that the fallback remains conservative. The PR tests a related overflow regime, but the inspected diff does not add this exact small-rho regression. Re-audit after merge; do not create a duplicate issue while the fix PR is open.

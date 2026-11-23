@@ -29,10 +29,10 @@ This affects extreme, valid representable privacy parameters; it is a low-severi
 
 ## Findings
 
-**Candidate, source-supported availability defect; upstream disposition: Unreported, subject to a final duplicate check.** Existing upstream [issue #1997](https://github.com/opendp/opendp/issues/1997) addressed a different directed-rounding underflow and is closed; [PR #2849](https://github.com/opendp/opendp/pull/2849) is closed and unmerged. Initial searches found no matching open issue in either repository and no open fix PR. No change to upstream OpenDP was made.
+**Candidate, source-supported availability defect; upstream disposition: Pending PR.** Final duplicate checks found open draft [upstream PR #2868](https://github.com/opendp/opendp/pull/2868), which replaces `cdp_delta` with `zcdp_delta` and explicitly catches `ErrorVariant::Overflow` when constructing the alpha upper bracket, substituting the valid `alpha=2` fallback. The PR is **not merged** into upstream `main`, so this is not fixed on the reviewed revision. The PR includes a related high-epsilon alpha-heuristic overflow regression but not the exact small-rho witness. No new audit or upstream issue was opened because a fix PR already exists. Historical [issue #1997](https://github.com/opendp/opendp/issues/1997) is a closed, distinct rounding-underflow case; [PR #2849](https://github.com/opendp/opendp/pull/2849) is closed unmerged.
 
 ## Unresolved questions
 
-- Execute the exact witness in compiled OpenDP and capture the error variant.
-- Check whether an optimal search bracket can be replaced by a capped `f64` bound or explicit finite-alpha fallback while preserving conservative directed rounding and monotonicity.
-- Add a regression checking that the extreme finite input produces a valid bound or a documented deliberate rejection; measure whether realistic mechanism parameters reach this range.
+- Execute the exact witness against compiled upstream `main` and draft PR #2868, capturing the error variant before the fix and the conservative `delta` after it.
+- Add a regression for the small-rho boundary; PR #2868 covers a different high-epsilon overflow case.
+- Recheck the merged implementation and the relevance to realistic mechanism parameters; do not file a duplicate issue while the fix PR is pending.
