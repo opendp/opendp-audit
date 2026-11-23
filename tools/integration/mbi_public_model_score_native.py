@@ -15,8 +15,8 @@ import opendp.prelude as dp
 from opendp.extras.mbi._utilities import (
     Count, typed_dict_domain, typed_dict_distance,
 )
-from opendp.extras.mbi._mst import _make_mst_scores
-from opendp.extras.mbi._aim import _make_aim_scores
+from opendp.extras.mbi._mst import _make_mst_scores, _make_mst_select
+from opendp.extras.mbi._aim import _make_aim_scores, _make_aim_select
 
 
 TOTAL = float(2**55 + 16)
@@ -132,6 +132,50 @@ def sample_aim():
     return log_ratio, eps
 
 
+
+def sample_actual_selection_constructors():
+    """Check the library's own score/selection calibration and invocation."""
+    model = model_with_concentrated_public_joint()
+    measure = dp.max_divergence()
+
+    mst_domain, mst_metric = input_space(EDGES)
+    mst_distance = {e: (1, 1, 1) for e in EDGES}
+    mst = _make_mst_select(
+        mst_domain, mst_metric, measure,
+        d_in=mst_distance, d_out=0.5, edges=EDGES, model=model,
+        num_selections=1,
+    )
+    assert mst is not None
+    mst_epsilon = mst.map(mst_distance)
+    print("Actual MST select epsilon:", mst_epsilon, flush=True)
+    assert 0 < mst_epsilon <= 0.5
+    mst_data = {e: np.array([[4, 0], [0, 0]], dtype=np.int32) for e in EDGES}
+    mst_result = mst(mst_data)
+    print("Actual MST select release:", mst_result, flush=True)
+    assert len(mst_result) == 1
+    assert tuple(mst_result[0]) in EDGES
+
+    aim_cliques = (("A",), ("B",))
+    aim_domain, aim_metric = input_space(aim_cliques)
+    aim_distance = {e: (1, 1, 1) for e in aim_cliques}
+    aim = _make_aim_select(
+        aim_domain, aim_metric, measure,
+        d_in=aim_distance, d_out=0.5, d_measure=0.5,
+        queries=[Count(("A",)), Count(("B",))],
+        model=model, max_size=80.0,
+    )
+    assert aim is not None
+    aim_epsilon = aim.map(aim_distance)
+    print("Actual AIM select epsilon:", aim_epsilon, flush=True)
+    assert 0 < aim_epsilon <= 0.5
+    aim_result = aim({
+        ("A",): np.array([4, 0], dtype=np.int32),
+        ("B",): np.array([4, 0], dtype=np.int32),
+    })
+    print("Actual AIM select release:", aim_result, flush=True)
+    assert tuple(aim_result) in aim_cliques
+
+
 if __name__ == "__main__":
     print("OpenDP", getattr(dp, "__version__", "unknown"),
           "NumPy", np.__version__, "MBI", getattr(mbi, "__version__", "unknown"),
@@ -139,3 +183,4 @@ if __name__ == "__main__":
     dp.enable_features("contrib", "idealized-numerics")
     print("MST ratio / epsilon:", sample_mst(), flush=True)
     print("AIM ratio / epsilon:", sample_aim(), flush=True)
+    sample_actual_selection_constructors()
