@@ -43,7 +43,7 @@ The existing upstream `test_series_nan_with_option` tests optional floats withou
 
 The audit includes a [standalone Python logical reference model](https://github.com/opendp/opendp-audit/blob/main/tools/tests/test_polars_series_member_null_validity_model.py), with cases for hidden 0/999 payloads, valid and invalid nonnull values, and the nonnullable rejection control. This deliberately does **not** execute compiled OpenDP/Polars.
 
-A [native pinned OpenDP integration regression](https://github.com/opendp/opendp-audit/blob/main/tools/integration/polars_series_member_null_backing.rs) additionally checks `SeriesDomain::member` using Polars 1.36.1 and inspects both the primitive raw buffer iterator and the validity-aware iterator. [Its dedicated workflow](https://github.com/opendp/opendp-audit/blob/main/.github/workflows/polars-series-member-null.yml) runs the test in a temporary checkout of the pinned upstream revision. Record the actual CI result before claiming native reproduction.
+A [native pinned OpenDP integration regression](https://github.com/opendp/opendp-audit/blob/main/tools/integration/polars_series_member_null_backing.rs) additionally checks `SeriesDomain::member` using Polars 1.36.1 and inspects both the primitive raw buffer iterator and the validity-aware iterator. [Its dedicated workflow](https://github.com/opendp/opendp-audit/blob/main/.github/workflows/polars-series-member-null.yml) ran against an ephemeral checkout of the exact pinned upstream revision and **succeeded** in [native CI run 45109173447](https://github.com/opendp/opendp-audit/actions/runs/45109173447): **2/2 compiled Rust tests passed**. The regression specifically asserts that Polars stores a null slot with hidden physical 0, that the logical nonnull iterator sees only 2, and that current OpenDP incorrectly returns `false` for a nullable bounded domain while the same domain accepts an all-valid in-range series.
 
 ### Impact and limits
 
@@ -55,6 +55,6 @@ A repair would change the per-chunk iteration to `arr.non_null_values_iter()` (o
 
 ## Next checks
 
-- Verify the dedicated compiled pinned-OpenDP/Polars CI result; test native nullable bounded integers and float domain members.
+- Extend the passing compiled integer witness to bounded nullable floats and alternative null-slot physical payloads.
 - Add a native regression to upstream OpenDP when fixing `SeriesDomain::member`.
 - Review the full downstream use of `FrameDomain::member` and `ExprDomain::member` to assess whether false negatives can become externally visible errors or impact privacy-related postconditions.
