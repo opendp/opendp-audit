@@ -80,15 +80,27 @@ The native `_make_aim_scores` transformation accepts both input dictionaries, re
 
 **Limit:** This test directly invokes the internal selection constructor; the full `make_contingency_table` pipeline, including estimation/reconstruction from previous DP marginals and its public-model reachability constraints, was not executed. The large but finite public model total is the remaining high-level question. The original *large expected-noise penalty* witness above is independently valid under its source-equivalent formula, but only the *large model with ordinary penalty* witness has been fully executed through native OpenDP/MBI.
 
+## Public AIM algorithm release and observable DP violation
+
+A subsequent [successful native release CI](https://github.com/opendp/opendp-audit/actions/runs/45255535102) exercised the supported `AIM.make_marginals` method with the same consistent MBI model, not merely `_make_aim_select`. Its input is three binary `UInt32` columns bounded to `[0,1]`, under `FrameDistance<SymmetricDistance>` with `d_in=[Bound(per_group=1)]`. The two native Polars frames have four `000` rows and those four plus one `010` row, with identical public schemas.
+
+The test uses `AIM(queries=[Count(("A",)),Count(("B",))], rounds=1, measure_split=0.5)`, `d_out=1.0`. The only custom component is a deterministic estimator returning the same precomputed public `MarkovRandomField`, **independent of private input**; this is permitted by OpenDP's `honest-but-curious` callback contract, with the feature explicitly enabled. The actual compiled `measurement.map(d_in)` returns `epsilon=1.0`. Both neighboring real `measurement(pl.LazyFrame(...))` invocations completed, and their returned `Marginals.cliques()` each contains exactly one of the private candidate cliques `A` and `B`.
+
+The selection uses a public expected-noise penalty `P=4` (`d_measure≈0.5`), not the extreme penalty from the original analysis. The real one-way score vectors are tied on the four-row input, then the `A` score decreases by 16 under one-row insertion, while `B` stays fixed. The private selector is calibrated to approximately `epsilon_select=0.5` at scale `s≈4`; its observable `A` event probabilities are `1/2` versus `exp(-16/s)/2`, giving log likelihood ratio `16/s≈4`. This exceeds the whole advertised `epsilon=1.0` of the public `AIM.make_marginals` measurement. The selected clique remains observable in the released `Marginals` structure even after noisy counting; later estimator postprocessing cannot hide that event.
+
+This is a **native successful-release counterexample for the public AIM algorithm method**, with analytic event probability from actual native scores and the inspected Rust permute-and-flip algorithm. It is not merely a floating-point model or an assertion about an unreachable intermediate. The outer `Context.contingency_table` workflow and its model-re-estimation path remain untested and could constrain model totals.
+
+[Native release regression](../tools/integration/mbi_large_model_algorithm_release_native.py) · [CI](https://github.com/opendp/opendp-audit/actions/runs/45255535102) · [audit #125](https://github.com/opendp/opendp-audit/issues/125).
+
 ## Findings
 
-**Native verified internal scorer-to-selector privacy-map counterexample, plus a separate source-level large-penalty witness.** Filed [audit #125](https://github.com/opendp/opendp-audit/issues/125), associated with [task #124](https://github.com/opendp/opendp-audit/issues/124). This is distinct from [upstream #2789](https://github.com/opendp/opendp/issues/2789), which concerns numerical precision of *privacy budget comparisons*, and from earlier AIM PRs #2905/#2906 and [#3108](https://github.com/opendp/opendp/pull/3108), which do not bound score-subtraction rounding.
+**Native verified public AIM algorithm release-path privacy violation, plus a separate source-level large-penalty witness.** Filed [audit #125](https://github.com/opendp/opendp-audit/issues/125), associated with [task #124](https://github.com/opendp/opendp-audit/issues/124). This is distinct from [upstream #2789](https://github.com/opendp/opendp/issues/2789), which concerns numerical precision of *privacy budget comparisons*, and from earlier AIM PRs #2905/#2906 and [#3108](https://github.com/opendp/opendp/pull/3108), which do not bound score-subtraction rounding.
 
-The internal counterexample with an ordinary penalty of 4 no longer requires tiny positive budget settings; it does require a large public synthetic-model total. End-to-end reachability through the default high-level AIM model-fitting path remains unverified.
+The native full `AIM.make_marginals` release counterexample with an ordinary penalty of 4 no longer requires tiny positive budget settings; it does require a large public synthetic-model total and the permitted honest-but-curious custom estimator. Only the outer `Context.contingency_table` wrapper's default model-fitting path remains unverified.
 
 ## Unresolved questions
 
-1. Validate complete high-level `make_contingency_table` model-reuse/fitting constraints with a publicly constructible large MBI model; the internal scorer and `_make_aim_select` have been verified in a published native wheel.
+1. Validate `Context.contingency_table` model-reuse/fitting constraints with a large MBI model; the standalone public `AIM.make_marginals` measurement now constructs and releases natively.
 2. For the separate original huge-penalty witness, establish that all required AIM nested budget searches permit the very small public `measure_split`.
 3. Examine conservative `float64` error bounds for subtraction, overflow/underflow, and `model.project` values, then select an implementable mitigation that does not understate sensitivity.
 4. Review final upstream PRs for a fix before resolving #125.
