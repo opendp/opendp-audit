@@ -23,7 +23,7 @@ A `new_closed` atom domain of an in-range, ordered scalar must either provide `O
 3. `impl_CheckAtom_simple!(bool String char &str)` implements `CheckAtom` without overriding `is_bounded`. Its default returns `FailedFunction: bounds check is not implemented`. Hence bounded domains of all four built-in scalar types fail even for in-range values.
 4. Numeric `CheckAtom` implementations delegate bounded checks to `Bounds::member`, and unbounded strings do not call `is_bounded`. These are negative controls. NaN endpoints are rejected by `Bounds::new`.
 
-**Verification boundary:** This is a deterministic source-level call trace, not an executed OpenDP test at initial recording. A [pinned native Rust test](../tools/integration/bounded_atom_domain_membership.rs) and [workflow](../.github/workflows/bounded-atom-domain-membership.yml) are intended to check compiled behavior. No compiled result is claimed until CI reports it.
+**Native verification (2026-11-23):** [Pinned CI run 45112011556](https://github.com/opendp/opendp-audit/actions/runs/45112011556) built the actual OpenDP Rust crate at `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` with `--no-default-features --features contrib` and executed [the regression](../tools/integration/bounded_atom_domain_membership.rs): **2 passed, 0 failed**. The `bounded_simple_scalar_domains_error_on_member` test reproduced the errors for all four simple scalar types, while `numeric_unbounded_and_invalid_bound_controls` checked expected successful and rejected cases. This is native reproduction of the API mismatch, not an inferred privacy failure.
 
 ## Findings
 
@@ -31,4 +31,4 @@ A `new_closed` atom domain of an in-range, ordered scalar must either provide `O
 
 ## Unresolved questions
 
-Confirm native reproduction, choose whether to implement `is_bounded` for these scalars or reject bounded construction, and assess whether custom `CheckAtom` implementations have analogous contracts. No privacy loss has been demonstrated.
+Choose whether to implement `is_bounded` for these scalars or reject bounded construction, and assess whether custom `CheckAtom` implementations have analogous contracts. No privacy loss has been demonstrated.
