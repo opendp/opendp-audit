@@ -18,14 +18,15 @@ from opendp.extras.mbi._aim import _make_aim_scores, _make_aim_select
 from opendp.extras.mbi._utilities import typed_dict_domain, typed_dict_distance
 
 PENALTY = float(2**54 + 8)
-MEASURE_SPLIT = 3 / PENALTY
+NUM_CATEGORIES = 9
+MEASURE_SPLIT = NUM_CATEGORIES / PENALTY
 CLIQUE_A = ("A",)
 CLIQUE_B = ("B",)
 CLIQUE_NAMES = (CLIQUE_A, CLIQUE_B)
 
 
 def public_table():
-    domain = mbi.Domain.fromdict({"A": 3, "B": 3, "C": 3})
+    domain = mbi.Domain.fromdict({"A": NUM_CATEGORIES, "B": NUM_CATEGORIES, "C": NUM_CATEGORIES})
     logs = np.full(domain.shape, -1000.0, dtype=np.float64)
     logs[0, 0, 0] = 0.0
     logs[1, 0, 0] = 0.0
@@ -40,14 +41,15 @@ def public_table():
     )
     print("MBI small-model A:", model.project(CLIQUE_A).values, flush=True)
     print("MBI small-model B:", model.project(CLIQUE_B).values, flush=True)
-    keys = {col: pl.Series(col, [0, 1, None], dtype=pl.UInt32)
+    keys = {col: pl.Series(col, [*range(NUM_CATEGORIES - 1), None], dtype=pl.UInt32)
             for col in ("A", "B", "C")}
     return ContingencyTable(keys=keys, cuts={}, model=model, marginals=Marginals())
 
 
 def marginal_tables(with_added):
-    a = np.asarray([2, 0, 0], dtype=np.int32)
-    b = np.asarray([2, 0, 0], dtype=np.int32)
+    a = np.zeros(NUM_CATEGORIES, dtype=np.int32)
+    b = np.zeros(NUM_CATEGORIES, dtype=np.int32)
+    a[0] = b[0] = 2
     if with_added:
         a[0] += 1
         b[1] += 1
@@ -71,7 +73,7 @@ def probability(scores, index, scale):
 def analytic_event_ratio(table):
     model = table.model
     d = typed_dict_domain({
-        q: dp.numpy.arrayd_domain(shape=(3,), T="i32") for q in CLIQUE_NAMES
+        q: dp.numpy.arrayd_domain(shape=(NUM_CATEGORIES,), T="i32") for q in CLIQUE_NAMES
     })
     metric = typed_dict_distance(
         dp.l01inf_distance(dp.absolute_distance(T="i32"))
@@ -91,7 +93,7 @@ def analytic_event_ratio(table):
     sensitivity = score.map(distance)
     print("AIM small public model scores", before, after,
           "delta", after - before,
-          "penalty", 3 / d_measure,
+          "penalty", NUM_CATEGORIES / d_measure,
           "sensitivity", sensitivity, flush=True)
     assert sensitivity == 1.0
     d_select = float(np.nextafter(np.nextafter(1.0 - d_measure, -np.inf), -np.inf))
