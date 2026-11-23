@@ -43,6 +43,8 @@ The existing zero-scale Laplace and Gaussian tests verify equality exclusion and
 
 **Scope qualification:** This statement applies to the **integer-stage** output, before any float reconversion. The non-deprecated float Laplace/Gaussian adapters can round a retained value back to the public threshold; see [float threshold post-rounding audit](nature/float/mod.rs.md) and [issue #44](https://github.com/opendp/opendp-audit/issues/44). This does not change the correctness of the integer comparison or establish a privacy-accounting violation.
 
+**Integer adapter qualification:** The integer threshold adapter can likewise return the public threshold **after** its saturating cast: an `IBig` value of `256` passes a `u8` threshold of `255`, but saturates to `255u8` in the final map. The negative `i8::MIN` boundary behaves analogously. See the [integer post-saturation source audit](nature/integer/mod.rs.md), [investigation](../../../../../investigations/integer-threshold-postsaturation.md), and [issue #58](https://github.com/opendp/opendp-audit/issues/58). The core `IBig` comparison remains correct, and no privacy-accounting failure is implied.
+
 ### Output ordering
 
 The core closure collects eligible `(key, noisy_count)` pairs into a vector, calls `pairs.shuffle()?`, and only then builds a new `HashMap`. This avoids deterministically forwarding the input iteration order to the result, including when keys collide. The shuffle implementation uses `SliceRandom::shuffle` with `GeneratorOpenDP`. The upstream `test_noise_threshold_shuffles_colliding_keys` regression uses colliding hashes and checks that an output permutation outside the original cyclic orders is observed across trials.

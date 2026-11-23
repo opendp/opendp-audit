@@ -29,4 +29,8 @@ jobs:
         run: |
           rustc --edition=2021 --test tools/tests/float_threshold_postrounding.rs -o "$RUNNER_TEMP/float_threshold_postrounding"
           "$RUNNER_TEMP/float_threshold_postrounding"
+      - name: Check integer threshold post-saturation alias in native Rust
+        run: |
+          rustc --edition=2021 --test tools/tests/integer_threshold_postsaturation.rs -o "$RUNNER_TEMP/integer_threshold_postsaturation"
+          "$RUNNER_TEMP/integer_threshold_postsaturation"
       - run: python tools/validate.py
