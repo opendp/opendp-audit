@@ -1,7 +1,7 @@
 ---
 schema_version: 1
-upstream_commit: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
-updated: 2026-11-22
+upstream_commit: a010591f55b1713c926f8e355091471634480307
+updated: 2026-11-23
 status: Partial
 ---
 
@@ -11,11 +11,12 @@ status: Partial
 
 The `make_privacy_filter` wrapper must not disclose *either* an invocation's successful result or an invocation error after the cumulative privacy loss exceeds the configured output budget. A measurement can first perform a private computation and then fail in data-dependent postprocessing; that failure is an observable outcome and must be accounted for. Observations are restricted to results and errors of the OpenDP queryable API; runtime side effects and timing channels are excluded.
 
-This is a property of a **valid odometer**, not an authorization to substitute an arbitrary queryable that lies about its privacy loss. The review specifically traces the non-deprecated `make_fully_adaptive_composition` implementation coupled with `make_privacy_filter` at upstream commit `ef1a238634d6196b01a1a1e77d3d5ad2340e3094`.
+This is a property of a **valid odometer**, not an authorization to substitute an arbitrary queryable that lies about its privacy loss. The review specifically traces the non-deprecated `make_fully_adaptive_composition` implementation coupled with `make_privacy_filter` initially examined at upstream commit `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` and reverified at current main `a010591f55b1713c926f8e355091471634480307`.
 
 ## Affected symbols and source audits
 
-- [Filter source report](../source/rust/src/combinators/privacy_filter/mod.rs.md) covering the output gate and its limitations.
+- [Filter source report](../source/rust/src/combinators/privacy_filter/mod.rs.md) covering the output gate and its limitations; refreshed at `a010591f55b1713c926f8e355091471634480307` for the merged nonnegative-budget guard.
+- [Fully adaptive odometer source audit](../source/rust/src/combinators/sequential_composition/fully_adaptive/mod.rs.md) reviewing failed-invocation accounting and child permissions at `a010591f55b1713c926f8e355091471634480307`.
 - [Upstream `make_privacy_filter` and `new_continuation_rule`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/privacy_filter/mod.rs)
 - [Upstream `new_fully_adaptive_composition_queryable`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/sequential_composition/fully_adaptive/mod.rs)
 - [Queryable forwarding and `Wrapper` machinery](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/interactive/mod.rs)
@@ -46,13 +47,13 @@ The fourth row is the critical safety gate. Both the success and error paths use
 
 The reviewed code contains Rust tests `test_privacy_filter_failed_postprocessing_counts_privacy_loss`, `test_privacy_filter_exhaustion_withholds_postprocessing_error`, `test_privacy_filter_failed_postprocessing_cannot_refund_budget`, and fully adaptive odometer tests for failed-postprocessing accounting. Those tests were **read, not run**, in this session. Their historical execution is described in merged [PR #3116](https://github.com/opendp/opendp/pull/3116), which closed [issue #3104](https://github.com/opendp/opendp/issues/3104).
 
-The filter's check-after-execution design was previously discussed in [issue #2960](https://github.com/opendp/opendp/issues/2960). Since the filter controls return values, not arbitrary printing or resource use inside user-defined measurements, that concern is not resolved by the current gate and is not presented as a new privacy bug. Performance of repeated odometer privacy-loss queries is already tracked as [issue #2909](https://github.com/opendp/opendp/issues/2909).
+The filter's nonnegative-budget precondition was added by [merged PR #3287](https://github.com/opendp/opendp/pull/3287) after [upstream #3286](https://github.com/opendp/opendp/issues/3286) identified negative budget cancellation; current main rejects negative/NaN budgets prior to invocation. The filter's check-after-execution design was previously discussed in [issue #2960](https://github.com/opendp/opendp/issues/2960). Since the filter controls return values, not arbitrary printing or resource use inside user-defined measurements, that concern is not resolved by the current gate and is not presented as a new privacy bug. Performance of repeated odometer privacy-loss queries is already tracked as [issue #2909](https://github.com/opendp/opendp/issues/2909).
 
-**Execution status:** No upstream Rust integration tests, dynamic repro, or model checker were executed. The source and existing test implementations were inspected at the pinned revision; the local environment did not have a Rust compiler and could not access GitHub by `git clone`.
+**Execution status:** A current-`main` source-order/coverage preflight executed twelve checks and matched all twelve, including budget reservation before invocation, response gating, sequential-child retirement, and expected native test names. No upstream Rust integration tests, dynamic repro, or model checker were executed. The source and existing test implementations were inspected at the pinned revision; the local environment did not have a Rust compiler and could not access GitHub by `git clone`.
 
 ## Findings
 
-No new defect identified within the reviewed source-level control-flow invariant and the valid-odometer assumptions. Historical error-accounting failure is fixed on current `main` by merged PR #3116; do not duplicate it. No candidate issue was filed.
+No **novel** defect identified within the reviewed source-level control-flow invariant and the valid-odometer assumptions. Historical error-accounting failure is fixed on current `main` by merged PR #3116; negative-budget construction is fixed by merged PR #3287; do not duplicate either. The separate **panic-unwind TLS restoration** weakness in `interactive::wrap` remains on main but is already addressed by **open, unmerged** [PR #3277](https://github.com/opendp/opendp/pull/3277), which introduces an RAII guard. This concerns caught Rust panics, not ordinary `Fallible` errors. No new candidate-defect issue was filed; audit task [#132](https://github.com/opendp/opendp-audit/issues/132) records the bounded re-review.
 
 ## Unresolved questions
 
