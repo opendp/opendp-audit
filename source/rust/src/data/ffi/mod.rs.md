@@ -22,6 +22,8 @@ updated: 2026-11-22
 
 - **Additional audit scope:** The special `(PrivacyProfile, f64)` output encoder `tuple_curve_f64_to_raw`: distinct ownership of its cloned `AnyObject`, boxed delta, and two-element pointer array, as consumed by Python or R.
 
+- **Additional audit scope:** The specialized `Option<(f64, AnyObject)>` output of private-candidate selection, and the separate owned `Function<I, O>` handle export. Scratch-array ownership is distinguished from long-lived function handles.
+
 ## Symbol coverage
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
@@ -36,6 +38,8 @@ updated: 2026-11-22
 | `opendp_data__object_as_slice::tuple3_l0Pinf_distance_to_raw` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../../investigations/ffi-composite-output-ownership.md) |
 | `opendp_data__object_as_slice::hashmap_to_raw` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../../investigations/ffi-composite-output-ownership.md) |
 | `opendp_data__object_as_slice::tuple_curve_f64_to_raw` | memory/profile-tuple-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Special tuple analysis](#special-privacyprofile-tuple-output) and [investigation](../../../../../investigations/ffi-profile-tuple-output.md) |
+| `opendp_data__object_as_slice::option_to_raw` | memory/optional-candidate-output | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Optional candidate](#optional-candidate-output); [cross-file investigation](../../../../../investigations/ffi-optional-candidate-function-output.md) |
+| `opendp_data__object_as_slice::function_to_raw` | memory/function-handle-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Function handle](#function-handle-output); [cross-file investigation](../../../../../investigations/ffi-optional-candidate-function-output.md) |
 ## Analysis
 
 ### Native helper and cleanup — `memory/temporary-slice-ownership`
@@ -99,6 +103,22 @@ updated: 2026-11-22
 
 **Limits and pending work:** Only this special output branch is assessed; `(f64, ExtrinsicObject)` and `Function` output paths remain separate. No native memory profiler or runtime regression was executed. [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) retains the scratch profile under `FfiSliceOwner` and borrows the delta until conversion finishes, addressing the leaked scratch allocations if correctly integrated.
 
+### Optional candidate output
+
+**Finding:** For a `Some((score, candidate))` value of type `Option<(f64, AnyObject)>`, `option_to_raw` creates `util::into_raw([score_ptr, candidate_ptr])`, a heap-owned two-pointer array, and returns its address as `FfiSlice.ptr`. The pointers refer to fields borrowed from the source `AnyObject`; only the array is scratch-owned. `opendp_data__slice_free` explicitly frees only the outer descriptor, so the pointer array has no reclamation path in the legacy output conversion. For `None` the pointer is null and the length is zero, so this subfinding does not apply.
+
+**Reachability:** The [private-candidate FFI constructor](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/select_private_candidate/ffi.rs) invokes the generic algorithm with an erased candidate type `AnyObject` and wraps its `Option<(f64, AnyObject)>` result as an `AnyObject`. Python has a specialized tuple decoder; R does not support the nested `AnyObject` member.
+
+**Status:** [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) allocates the pointer array under `FfiSliceOwner::pointers`, pending merge. This is source-based ownership tracing; native allocations were not profiled.
+
+### Function handle output
+
+**Scoped negative finding for Python:** `function_to_raw` clones a `Function<I,O>`, converts it into an owned `AnyFunction`, and transfers it through `util::into_raw`. Python `_slice_to_function` wraps that same pointer in a `Function` instance whose destructor invokes `_function_free`. This differs from scratch arrays that only live during copying: the function clone is intended to escape.
+
+**Evidence:** The source allocation is [`function_to_raw`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/data/ffi/mod.rs); the matching Python [`Function.__del__`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/python/src/opendp/mod.py) invokes `_function_free`. A standalone Python `ctypes` opaque-pointer check verified that `.contents` followed by `ctypes.pointer` preserves the address, but it did not execute OpenDP or verify destructor counts.
+
+**Limits:** No native function-output lifetime test, interpreter-shutdown test, or R generic-function output reachability check was performed. [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) replaces this legacy path with an explicit `clone_function` API, also pending merge.
+
 ## Next checks
 
 - Check the eventual merged code and native regression tests for complete release of pointer-array storage under both success and error conditions.
@@ -111,3 +131,5 @@ updated: 2026-11-22
 - Verify composite scratch-buffer cleanup under a native allocation checker after PR #3179 is merged; separately test normal conversions and failures.
 
 - For specialized profile tuples, verify the eventual merged implementation with compiled R/Python roundtrips and a native memory checker; consult the [dedicated investigation](../../../../../investigations/ffi-profile-tuple-output.md).
+
+- Check the specialized optional-candidate output in compiled R and Python bindings, and instrument escaped Function-handle destruction; see [investigation](../../../../../investigations/ffi-optional-candidate-function-output.md).

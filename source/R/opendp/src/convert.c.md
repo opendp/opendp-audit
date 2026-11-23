@@ -21,6 +21,8 @@ updated: 2026-11-22
 
 - **Additional audit scope:** Specialized `(PrivacyProfile, f64)` output through `slice_to_tuple` and `voidptr_to_sexp`, focusing on whether an R `privacy_profile` value can be decoded as a tuple member.
 
+- **Additional audit scope:** Decoding a nonempty `Option<(f64, AnyObject)>` output from private-candidate selection, and a limited structural check of generic `Function` output dispatch.
+
 ## Symbol coverage
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
@@ -32,6 +34,9 @@ updated: 2026-11-22
 | `slice_to_hashmap` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../investigations/ffi-composite-output-ownership.md) |
 | `slice_to_tuple` | correctness/profile-tuple-output | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Special tuple analysis](#special-privacyprofile-tuple-output) and [investigation](../../../../investigations/ffi-profile-tuple-output.md) |
 | `voidptr_to_sexp` | correctness/profile-tuple-output | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Special tuple analysis](#special-privacyprofile-tuple-output): no `PrivacyProfile` branch exists |
+| `slice_to_tuple` | correctness/private-candidate-output | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Optional candidate](#optional-candidate-output): nested AnyObject lacks decoder; [cross-file investigation](../../../../investigations/ffi-optional-candidate-function-output.md) |
+| `voidptr_to_sexp` | correctness/private-candidate-output | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Optional candidate](#optional-candidate-output): no AnyObject case; [cross-file investigation](../../../../investigations/ffi-optional-candidate-function-output.md) |
+| `slice_to_sexp` | correctness/function-object-output | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Generic Function](#generic-function-output): no case; public R reachability unverified; [cross-file investigation](../../../../investigations/ffi-optional-candidate-function-output.md) |
 ## Analysis
 
 ### `anyobjectptr_to_sexp` — `memory/ownership`
@@ -88,6 +93,18 @@ updated: 2026-11-22
 
 **Upstream status and limits:** The reviewed [PR #3179 R converter](https://github.com/opendp/opendp/blob/bccc2aeb6e38ac5b2ad7894eae8fa441080d8119/R/opendp/src/convert.c) still uses `voidptr_to_sexp` for each tuple member, and its branch at commit `bccc2aeb6e38ac5b2ad7894eae8fa441080d8119` likewise lacks a profile case. The PR does address Rust scratch ownership but does **not** resolve this decoding gap on the inspected patch. This is a source-confirmed dispatch mismatch, not a runtime reproduction. It is a correctness/usability issue, not evidence of a privacy guarantee failure. Tests of actual R error text and failure-path cleanup remain outstanding.
 
+### Optional candidate output
+
+**Conclusion:** On a nonempty `Option<(f64, AnyObject)>` result, R enters `slice_to_sexp` for `Option`, then `Tuple`, and calls `slice_to_tuple`. The second tuple field is typed `AnyObject`. The tuple converter invokes `voidptr_to_sexp` for that field; the latter implements numeric, string, Boolean, and `ExtrinsicObject` cases, but not `AnyObject`, and falls through to `error_unknown_type`. A successful private-candidate release cannot be converted by this path. `None` returns `R_NilValue` and does not enter the defective branch.
+
+**Reachability:** The generic [`make_select_private_candidate`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/select_private_candidate/mod.rs) returns `Option<(f64, TO)>` and the [FFI implementation](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/select_private_candidate/ffi.rs) chooses `TO = AnyObject` and wraps its result. This is a source-confirmed decoding gap, not an R runtime reproduction.
+
+**Upstream status and limits:** The [draft PR #3179 converter](https://github.com/opendp/opendp/blob/bccc2aeb6e38ac5b2ad7894eae8fa441080d8119/R/opendp/src/convert.c) still sends all tuple fields through `voidptr_to_sexp`. The proposed scratch owner addresses the array leak but does not fix this dispatch. No R integration test was run; privacy accounting was not assessed.
+
+### Generic Function output
+
+**Partial structural check:** `slice_to_sexp` has no generic `Function` case; if a `Function<I,O>` were returned as an `AnyObject` through that decoder, it would be rejected. However, no public R route producing that specific generic output was established. Generated native `AnyFunction *` results instead call [`anyfunctionptr_to_sexp`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/R/opendp/src/convert_elements.c), which registers its own finalizer. No bug is asserted for that direct path.
+
 ## Next checks
 
 - After PR #3176 merges, inspect the merged SHA and test normal returns and nonlocal R error exits under a native leak checker.
@@ -100,3 +117,5 @@ updated: 2026-11-22
 - Verify composite scratch-buffer cleanup under a native allocation checker after PR #3179 is merged; separately test normal conversions and failures.
 
 - For specialized profile tuples, verify the eventual merged implementation with compiled R/Python roundtrips and a native memory checker; consult the [dedicated investigation](../../../../investigations/ffi-profile-tuple-output.md).
+
+- Check the specialized optional-candidate output in compiled R and Python bindings, and instrument escaped Function-handle destruction; see [investigation](../../../../investigations/ffi-optional-candidate-function-output.md).

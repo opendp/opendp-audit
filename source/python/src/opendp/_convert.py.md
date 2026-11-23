@@ -21,6 +21,8 @@ updated: 2026-11-22
 
 - **Additional audit scope:** The `(PrivacyProfile, f64)` branch of `_slice_to_tuple`, distinguishing the owned profile clone from the otherwise unreclaimed Rust delta allocation and pointer array.
 
+- **Additional audit scope:** Decoding `Option<(f64, AnyObject)>` in `_slice_to_option` and `_slice_to_tuple`, and ownership of a cloned `Function<I,O>` returned by `_slice_to_function`.
+
 ## Symbol coverage
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
@@ -30,6 +32,8 @@ updated: 2026-11-22
 | `_slice_to_tuple` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../investigations/ffi-composite-output-ownership.md) |
 | `_slice_to_hashmap` | memory/composite-output-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Composite ownership](#composite-output-backing-ownership) and [investigation](../../../../investigations/ffi-composite-output-ownership.md) |
 | `_slice_to_tuple` | memory/profile-tuple-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Special tuple analysis](#special-privacyprofile-tuple-output) and [investigation](../../../../investigations/ffi-profile-tuple-output.md) |
+| `_slice_to_tuple` | memory/optional-candidate-output | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Optional candidate](#optional-candidate-output): valid borrowed nested pointer; scratch array unfreed; [cross-file investigation](../../../../investigations/ffi-optional-candidate-function-output.md) |
+| `_slice_to_function` | memory/function-handle-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Function handle](#function-handle-output): owned clone has Python finalizer; [cross-file investigation](../../../../investigations/ffi-optional-candidate-function-output.md) |
 ## Analysis
 
 ### `_slice_to_vector` — `memory/temporary-slice-ownership`
@@ -80,6 +84,20 @@ updated: 2026-11-22
 
 **Upstream status and limits:** [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) instead keeps the clone in a temporary owner, passes a borrowed pointer to `c_to_py` (which makes an independently owned clone for escaping profiles), and releases the owner after decoding. Source inspection supports that design, but compiled tests, native allocation measurements, and exceptional conversion handling were not executed in this audit.
 
+### Optional candidate output
+
+**Conclusion:** Python's `_slice_to_option` delegates nonempty options to the specialized `[f64, AnyObject]` branch of `_slice_to_tuple`, which copies the score and converts the candidate using a borrowed `ctypes.POINTER(AnyObject)`. The nested pointer is not an owning `AnyObjectPtr`; that is appropriate for source-owned tuple fields. The Rust `Some` branch nevertheless leaks its heap-allocated two-pointer scratch array, since the outer `slice_free` cannot reclaim pointee storage.
+
+**Negative finding:** The `None` branch requires no pointer array. For nonempty results, the tuple pointer shape matches Python's reader; the issue is allocation cleanup, not a `char *`/`char **`-style layout mismatch.
+
+**Limits:** No compiled private-selection roundtrip or leak measurement was performed. [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) retains the pointer array in `FfiSliceOwner`.
+
+### Function handle output
+
+**Scoped negative finding:** The Rust-exported `AnyFunction` clone and Python's `Function` wrapper have matching ownership roles. `_slice_to_function` constructs an owning pointer to the same native address; [`Function.__del__`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/python/src/opendp/mod.py) calls `_function_free`. The outer `FfiSlice` descriptor is separately cleaned up, and must not free the escaped function handle.
+
+**Verification limit:** A standalone `ctypes` experiment with an opaque structure preserved the native pointer address through `.contents`/`pointer` conversion. It did not run OpenDP, check single-release counts, or test interpreter shutdown. This does not rule out other issues in callback lifelines. [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) supplies a direct `clone_function` route.
+
 ## Next checks
 
 Run a native conversion loop with allocation instrumentation, then verify that the eventual merged ownership implementation reclaims both the view header and pointer-array storage, including conversion errors.
@@ -91,3 +109,5 @@ Run a native conversion loop with allocation instrumentation, then verify that t
 - Verify composite scratch-buffer cleanup under a native allocation checker after PR #3179 is merged; separately test normal conversions and failures.
 
 - For specialized profile tuples, verify the eventual merged implementation with compiled R/Python roundtrips and a native memory checker; consult the [dedicated investigation](../../../../investigations/ffi-profile-tuple-output.md).
+
+- Check the specialized optional-candidate output in compiled R and Python bindings, and instrument escaped Function-handle destruction; see [investigation](../../../../investigations/ffi-optional-candidate-function-output.md).
