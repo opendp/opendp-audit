@@ -1,0 +1,40 @@
+name: Verify bounded AtomDomain scalar membership in pinned OpenDP
+
+on:
+  push:
+    paths:
+      - '.github/workflows/bounded-atom-domain-membership.yml'
+      - 'tools/integration/bounded_atom_domain_membership.rs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-opendp:
+    name: Compiled bounded AtomDomain scalar regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout audit test
+        uses: actions/checkout@v4
+      - name: Checkout pinned upstream OpenDP
+        uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
+          path: opendp-upstream
+          persist-credentials: false
+      - name: Verify upstream revision and install native test
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C opendp-upstream rev-parse HEAD)" = 'ef1a238634d6196b01a1a1e77d3d5ad2340e3094'
+          mkdir -p opendp-upstream/rust/tests
+          cp tools/integration/bounded_atom_domain_membership.rs opendp-upstream/rust/tests/
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run native bounded AtomDomain membership regression
+        run: |
+          cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
+            --no-default-features --features contrib \
+            --test bounded_atom_domain_membership -- --nocapture
