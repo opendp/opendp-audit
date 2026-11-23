@@ -25,6 +25,16 @@ For public `stop_probability = p` between zero and one and a valid, constantly b
 3. At `p=0.01` the first-iteration stopping probability is virtually `1`. At `p=0.50` it is `0.763709911655`; at `p=0.90` it is `0.352278514858`. Independent Python standard-library computations of the formulas were executed. No OpenDP Rust binary or sample-based regression was executed.
 4. The `p=0` branch is handled separately and is unaffected. The generic `2ε` selection bound may still apply because the actual stopping distribution is a geometric distribution with a different public parameter; an independent proof was not completed.
 
+### Finite privacy-model checks
+
+A reproducible [standard-library Python test](../tools/tests/test_select_private_candidate_model.py) was added. For a base scorer with probabilities `(a,b,c)` for two qualifying outcomes and one below-threshold outcome, write `q=a+b` and let `r` be its actual public per-failure stop probability. For `r+(1-r)q>0`, the output law is
+
+- `P(A)=a/[r+(1-r)q]`
+- `P(B)=b/[r+(1-r)q]`
+- `P(None)=r*c/[r+(1-r)q]`
+
+The test enumerates the 55 strictly positive three-outcome rational distributions with denominator 12, compares every directed pair (55²), and repeats for `r in {0, 1/100, 1/10, 1/2, 9/10}` (15,125 pairs). It verifies by `fractions.Fraction` that each output likelihood ratio in either direction does not exceed the square of the maximum base likelihood ratio. It also checks the mismatched numerical rates and the `p=0`, never-qualifying nontermination case. This is an **independent idealized model**, not native OpenDP execution, and is not a general privacy proof. No finite counterexample to the factor-two bound was found.
+
 ## Findings
 
 **Confirmed source-level correctness mismatch, without an executed OpenDP reproduction.** The parameter documented as the per-iteration early stopping probability is not the probability realized by the implementation. The impact is selection behavior, utility, and runtime; **no privacy violation is claimed**. Searches of the audit repository and upstream issues/PRs by symbol, stopping parameter, and geometric-selection terms did not reveal an equivalent tracked fix. No issue or PR was opened under current user restrictions.

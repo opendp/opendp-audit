@@ -42,6 +42,10 @@ At `p=0.01`, when scores never exceed the threshold, the intended expected call 
 
 The privacy map computes twice the child epsilon using `inf_mul(&2.0)`. The realized iteration count remains an independently sampled shifted geometric distribution, albeit for a **different** public stopping probability. The private-selection theorem used in the upstream proof gives a `2ε` bound independent of that positive probability. This points to a correctness/utility failure rather than a demonstrated privacy breach. A full verification of the selection theorem, finite-precision operations, and all child error paths was not performed: privacy coverage is `Partial`.
 
+### Independent finite privacy check
+
+An independent, exact-rational [reference model](../../../../../tools/tests/test_select_private_candidate_model.py) analytically tests the retained early-stop distribution's factor-two privacy claim. It checks 15,125 directed pairs of full-support three-outcome scorer distributions across five stopping probabilities; each output likelihood ratio stays within the square of the base likelihood-ratio bound. These checks do **not** execute Rust or resolve the confirmed stopping-rate mismatch. They support keeping the privacy assessment **Partial**, not classifying the mismatch as a demonstrated privacy undercount.
+
 ## Next checks
 
 - Correct the rate/scale mismatch by passing an appropriately rounded `-ln(1-p)` to the geometric sampler or by drawing exact rational Bernoulli(`p`) trials after unsuccessful scores.
