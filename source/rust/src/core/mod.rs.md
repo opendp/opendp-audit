@@ -8,7 +8,7 @@ updated: 2026-11-22
 
 ## Scope and assumptions
 
-- **Audit scope:** Only `Function::make_chain`, `PrivacyMap::make_chain`, and `StabilityMap::make_chain` as used by `make_chain_mt`, `make_chain_tt`, and `make_chain_pm`; not the remaining core module.
+- **Audit scope:** Only `Function::make_chain`, `PrivacyMap::make_chain`, and `StabilityMap::make_chain` as used by `make_chain_mt`, `make_chain_tt`, and `make_chain_pm`, plus `PartialTransformation::fix` and `PartialMeasurement::fix` for deferred chaining; not the remaining core module.
 - **Invariant:** Given fallible inner `f0` and outer `f1`, every composed function/map evaluates `f0` before `f1`, returns `f1(f0(input))` on success, and propagates an inner `Err` without invoking the outer callback. The privacy/stability bound remains conservative assuming valid monotone component maps.
 - **Source:** [Reviewed core implementation](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/core/mod.rs), [chaining call sites](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/chain/mod.rs).
 
@@ -19,6 +19,8 @@ updated: 2026-11-22
 | `Function::make_chain` | correctness/fallible-composition | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Order and errors](../../../../investigations/chain-composition-contracts.md) |
 | `PrivacyMap::make_chain` | privacy/map-composition | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Order and assumptions](../../../../investigations/chain-composition-contracts.md) |
 | `StabilityMap::make_chain` | correctness/stability-composition | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Order and assumptions](../../../../investigations/chain-composition-contracts.md) |
+| `PartialTransformation::fix` | correctness/partial-fix-order | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Deferred constructor analysis](../../../../investigations/partial-chain-fix-propagation.md) |
+| `PartialMeasurement::fix` | correctness/partial-fix-order | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Deferred constructor analysis](../../../../investigations/partial-chain-fix-propagation.md) |
 
 ## Analysis
 
@@ -28,8 +30,10 @@ updated: 2026-11-22
 
 **Executed:** Python abstract-model checks covered 10,000 deterministic linear composition inputs and four failure short-circuit cases. These verify algebraic expectations, **not** compiled OpenDP or its Rust `Arc` implementations. Existing upstream unit and FFI tests cover normal invocation/map values but were not run in this audit.
 
-**Limitations:** No independent audit of `MetricSpace`, arbitrary custom `Domain::PartialEq`, `Function` side effects, or the `partials` feature; see [investigation](../../../../investigations/chain-composition-contracts.md).
+**Partial wrappers:** With `partials` enabled, both `PartialTransformation::fix` and `PartialMeasurement::fix` consume a stored `Box<dyn FnOnce(DI, MI) -> Fallible<T>>` and pass through the supplied input domain and metric without modification. Under a correctly behaving partial factory, this is the expected deferred-construction contract; see [partial chaining investigation](../../../../investigations/partial-chain-fix-propagation.md).
+
+**Limitations:** No independent audit of `MetricSpace`, arbitrary custom `Domain::PartialEq`, `Function` side effects, generated partial constructors, or arbitrary user callback semantics; see [investigation](../../../../investigations/chain-composition-contracts.md).
 
 ## Next checks
 
-Run native Rust unit and FFI tests and add fallible inner-map/outer-map order tests. No finding within this narrowly scoped code path.
+Run native Rust unit and FFI tests, including `partials` feature-enabled stage/error cases, and add fallible inner-map/outer-map order tests. No finding within these narrowly scoped code paths.
