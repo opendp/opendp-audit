@@ -1,0 +1,52 @@
+name: Audit task
+description: Claim a bounded code audit and record work ownership
+title: "[audit] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for work coordination, not defect reports. Claims are advisory and expire.
+        Search active audit tasks before opening another. Update and close on completion.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and invariants
+      description: Exact source paths/symbols and properties; make the unit bounded
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Upstream commit SHA
+      placeholder: 40-character SHA
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Claim identity
+      description: Unique agent or run ID
+    validations:
+      required: true
+  - type: input
+    id: started
+    attributes:
+      label: Claimed at (UTC)
+      placeholder: YYYY-MM-DDTHH:MM:SSZ
+    validations:
+      required: true
+  - type: input
+    id: expires
+    attributes:
+      label: Claim expires (UTC)
+      description: Typically 24 hours after claim; renew if still active
+      placeholder: YYYY-MM-DDTHH:MM:SSZ
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Related records and next action
+      description: Existing source reports, investigations, other tasks, dependencies, and planned checks
+    validations:
+      required: false

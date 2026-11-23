@@ -1,65 +1,74 @@
 name: Candidate defect
-description: Track a suspected OpenDP defect, including an unverified hypothesis
-title: "[candidate] "
+description: Track a distinct suspected OpenDP defect, including an unverified hypothesis
 body:
   - type: markdown
     attributes:
       value: |
-        This repository accepts speculative candidates. State uncertainty explicitly.
-        Check existing audit issues and upstream OpenDP issues/PRs before creating a duplicate.
-        For sensitive security vulnerabilities, follow OpenDP's security reporting policy.
+        Use audit-task issues to coordinate reviews. Candidate defects may remain unverified.
+        Check open and closed audit issues, upstream issues, and merged/open PRs first.
+        Follow OpenDP's security policy for sensitive vulnerabilities.
   - type: textarea
     id: hypothesis
     attributes:
-      label: Suspected defect
-      description: What invariant might fail, and under what conditions?
-      placeholder: "Under ..., the code may violate ... because ..."
+      label: Suspected invariant violation
+      description: What property may fail, for which inputs or assumptions?
     validations:
       required: true
   - type: input
     id: revision
     attributes:
-      label: OpenDP revision
-      description: Full commit SHA or branch; avoid claiming the bug affects current main without checking
-      placeholder: "commit SHA or ref"
+      label: Affected OpenDP commit SHA
+      description: Full commit SHA of the code inspected, not just a branch name
     validations:
-      required: false
+      required: true
   - type: textarea
     id: scope
     attributes:
-      label: Affected code and audit links
-      description: Paths, qualified symbols, and relevant source audits or investigations
+      label: Affected paths and symbols
+      description: Commit-pinned source links and audit report/investigation links
     validations:
-      required: false
+      required: true
   - type: textarea
     id: evidence
     attributes:
-      label: Evidence / reproduction
-      description: Tests, reasoning trace, counterexample, or why it is not yet verified
+      label: Reproduction, reasoning, or evidence gap
+      description: Separate executed tests from hypotheses and missing checks
     validations:
-      required: false
+      required: true
   - type: dropdown
-    id: confidence
+    id: verification
     attributes:
-      label: Verification state
+      label: Verification
       options:
-        - Candidate (unverified)
+        - Candidate
         - Reproduced
         - Confirmed
-        - Upstream-ready
     validations:
-      required: false
-  - type: textarea
-    id: prior
+      required: true
+  - type: dropdown
+    id: upstream
     attributes:
-      label: Related audit issues, upstream issues and PRs
-      description: Include possible duplicates, pending fixes, and main-branch status
+      label: Upstream disposition
+      options:
+        - Unreported
+        - Existing issue
+        - Pending PR
+        - Fixed on main
+        - Invalid
+        - Duplicate
+    validations:
+      required: true
+  - type: textarea
+    id: related
+    attributes:
+      label: Related audit issues and upstream issues/PRs
+      description: Include known duplicates, open fixes, and whether the fix has merged
     validations:
       required: false
   - type: textarea
     id: impact
     attributes:
-      label: Potential impact and next check
-      description: Privacy, correctness, safety, utility, usability, performance, and the next decisive verification step
+      label: Impact and next decisive check
+      description: Privacy, correctness, safety, utility, usability, or performance; concrete validation step
     validations:
       required: false

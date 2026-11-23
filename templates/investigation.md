@@ -1,27 +1,28 @@
-# <Property or investigation title>
+---
+schema_version: 1
+upstream_commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+updated: YYYY-MM-DD
+status: Partial
+---
 
-Upstream revision(s): `<full-commit-sha(s)>`  
-Last updated: `<YYYY-MM-DD>`  
-Status: <Partial | Audited for stated scope | Inconclusive | Stale>
+# <Cross-file property>
 
-## Property / invariant
+## Invariant and threat model
 
-<Precise invariant, expected guarantee, or failure mode under review.>
+State the exact property, assumptions, and what would constitute a counterexample. The SHA above is a placeholder; replace it with the reviewed upstream revision.
 
-## Scope
+## Affected symbols and source audits
 
-- **Affected source symbols:** <links to mirrored source audits and exact source references>
-- **Assumptions:** <public/private inputs, supported dtypes, backends, threat model, etc.>
-- **Out of scope:** <limitations>
+Link to source reports and commit-pinned upstream source. Explain how the components interact.
 
 ## Reasoning and evidence
 
-<Relevant data/control flow, test cases, proof obligations, attempted counterexamples, and negative findings.>
+Record the reasoning, tests actually run, counterexamples attempted, and any negative findings. Distinguish direct evidence from conjecture.
 
 ## Findings
 
-<Links to audit repository issues, or "No defect identified within stated scope".>
+Link to existing or newly deduplicated candidate issues, or state no defect was identified **within the stated scope**.
 
 ## Unresolved questions
 
-<Specific gaps and next checks.>
+Specific prerequisites, missing proofs, or checks to revisit after upstream changes.

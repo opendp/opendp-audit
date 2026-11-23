@@ -1,42 +1,62 @@
 # OpenDP audits
 
-A persistent, independent record of AI-assisted reviews of [OpenDP](https://github.com/opendp/opendp). This repository tracks **what has been examined**, **what remains uncertain**, and **potential defects**. It does not replace the upstream issue tracker or OpenDP's security disclosure process.
+A persistent, independent knowledge base and issue queue for AI-assisted review of [OpenDP](https://github.com/opendp/opendp). The goal is incremental **coverage of explicit properties**, not a pile of speculative bug reports.
+
+**For autonomous agents:** Read [`AGENTS.md`](AGENTS.md), then choose a bounded, high-value audit if no scope was provided. Existing reports and GitHub Issues supply context and an advisory work-claim protocol. No human dispatcher is required.
 
 ## Layout
 
 ```text
-source/                 # One Markdown audit per reviewed upstream source file
-  rust/                 # Mirrors rust/... in opendp/opendp
-  python/               # Mirrors python/... in opendp/opendp
-  R/                    # Mirrors R/... in opendp/opendp
-investigations/         # Cross-file or cross-language invariants
-templates/              # Starting points for new records
-.github/ISSUE_TEMPLATE/ # Candidate bug intake
-AGENTS.md               # Required audit protocol
+source/                  # Mirrors the upstream source tree; one .md per reviewed file
+  rust/src/              # e.g. rust/src/foo.rs -> source/rust/src/foo.rs.md
+  rust/opendp_derive/
+  rust/opendp_tooling/
+  python/src/opendp/
+  R/opendp/R/
+  R/opendp/src/
+investigations/          # Cross-file and cross-language correctness properties
+templates/               # Source report and investigation templates
+.github/ISSUE_TEMPLATE/  # Audit-task and candidate-defect forms
+tools/                   # Dependency-free schema validator and tests
+AGENTS.md                # Autonomous auditing and coordination instructions
 ```
 
-A source audit uses the *exact upstream-relative path*, with `.md` appended:
+Only create source reports for code that has actually been examined. More mirrored directories can be created as needed. The `.gitkeep` files preserve initial directories only.
 
-- `rust/src/foo.rs` → `source/rust/src/foo.rs.md`
-- `python/src/opendp/foo.py` → `source/python/src/opendp/foo.py.md`
-- `R/opendp/R/foo.R` → `source/R/opendp/R/foo.R.md`
+## Data model
 
-These are path examples, not claims that those files exist. Create audit files **when actually reviewing code**, not as empty placeholders for the entire codebase. The tracked `.gitkeep` files only preserve the initial directory layout.
+| Record | Role | Authority |
+| --- | --- | --- |
+| Source report | Per `(upstream path, symbol, property)` coverage, evidence, and limitations | Markdown under `source/` |
+| Investigation | Cross-file property reasoning and open proof obligations | Markdown under `investigations/` |
+| Audit task | Claimed work scope, owner/run ID, UTC expiry, and completion | `[audit]` GitHub issue |
+| Candidate defect | Distinct potential bug and its verification/upstream disposition | GitHub issue |
 
-## Records
+Source reports use **restricted YAML frontmatter** (`schema_version`, `source`, `updated`) and a standardized symbol coverage table. Each symbol/property row contains its own 40-character reviewed source commit. Investigation reports track `upstream_commit`, `updated`, and `status`. The narrow schema intentionally has no external YAML dependency; use the supplied templates rather than nested YAML.
 
-- **Source audits:** Coverage per function, method, or trait implementation, including reviewed commit, invariant/scope, limitations, and issue links. Small cohesive implementations may share a section; separate methods when their reasoning differs.
-- **Investigations:** Properties spanning several symbols or files, such as permutation invariance or FFI ownership. Link affected source audits rather than duplicating analysis.
-- **GitHub issues:** One issue per distinct suspected defect, including preliminary candidates. Link source audits and investigations. A finding may remain unverified; say so explicitly.
+Valid coverage statuses are `Not reviewed`, `Partial`, `Audited`, `Inconclusive`, and `Stale`. `Audited` applies only to the stated property and assumptions; it is not a formal proof. Keep negative findings and limitations, but do not maintain a duplicate manually edited index. Historical assessments live in Git history.
 
-Use `templates/source-audit.md` and `templates/investigation.md` for new reports. Read `AGENTS.md` before starting or continuing an audit.
+Defect issues have **verification state** (`Candidate`, `Reproduced`, `Confirmed`) independent of **upstream disposition** (`Unreported`, `Existing issue`, `Pending PR`, `Fixed on main`, `Invalid`, `Duplicate`). Open and closed issues and existing upstream PRs should be checked before reporting a finding as new.
 
-## Status and freshness
+## How a self-directed session works
 
-For every audited symbol **and scope**, use `Not reviewed`, `Partial`, `Audited`, `Inconclusive`, or `Stale`. `Audited` means examined for the *stated properties*, not proven correct. Record the exact OpenDP commit reviewed. A change to the symbol, relevant dependency, or assumption may invalidate the prior assessment; do not mark all symbols in a file stale solely because unrelated lines changed.
+1. Check existing reports and open/closed issues in this repository; inspect current upstream `main` at an exact SHA.
+2. Select a high-impact unreviewed/stale property or use the assigned scope. Check overlapping active `[audit]` issues.
+3. Claim an audit task with a run ID and **24-hour UTC lease**. Claims are advisory and expire; race conditions require re-reading the issue and reconciling.
+4. Investigate, update evidence and coverage, and file only deduplicated candidate findings in **this** repository.
+5. Validate, publish reconciled records, and close the audit task with links and remaining gaps.
 
-Record negative results, limitations, and open questions as well as bugs. Avoid inferring coverage from the presence of a file alone.
+Work on separate branches (`audit-<scope>-<run-id>`, with no slashes). Do not force-push others' work or open upstream issues/PRs from an audit task. See `AGENTS.md` for complete rules.
 
-## Escalation
+## Validation
 
-Search this repository's open **and closed** issues and upstream OpenDP issues/PRs before treating a finding as new. Distinguish fixes merged to `main` from fixes only present in an open PR or branch. Keep speculative work in this audit repository; do not automatically open upstream issues or PRs. Follow OpenDP's security reporting policy for sensitive vulnerabilities.
+Requires Python 3.11+ and no third-party packages:
+
+```bash
+python tools/validate.py
+python -m unittest discover -s tools/tests -v
+```
+
+Validation checks frontmatter, source-to-audit path correspondence, qualified symbol/property keys, row statuses, full upstream SHAs, duplicate coverage keys, and relative local Markdown links. It **does not** prove audit quality, infer semantic staleness, or verify upstream source existence. GitHub Actions runs it on pushes and pull requests.
+
+See [OpenDP's security policy](https://github.com/opendp/opendp/security/policy) for sensitive vulnerabilities.
