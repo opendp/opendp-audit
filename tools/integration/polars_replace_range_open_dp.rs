@@ -75,3 +75,29 @@ fn public_valid_int32_range_can_replace_three_keys() -> Fallible<()> {
     assert_eq!(t.invoke(&lf)?.collect()?, df!("x" => [10_i32, 10_i32, 10_i32, 4_i32])?);
     Ok(())
 }
+
+#[test]
+fn public_binary_key_invalid_utf8_to_string_is_rejected_or_errors_at_evaluation() -> Fallible<()> {
+    let domain = LazyFrameDomain::new(vec![SeriesDomain::new(
+        "x",
+        AtomDomain::<String>::default(),
+    )])?;
+    // OpenDP allows public old keys to cast to a String input dtype, but the
+    // pinned Polars executor rejects binary values that are invalid UTF-8.
+    let bad_binary = BinaryChunked::from_slice("old".into(), &[b"\xff".as_slice()]).into_series();
+    let new_values = Series::new("new".into(), ["replacement"]);
+    for values in [["a", "b"], ["unrelated", "values"]] {
+        let lf = df!("x" => values)?.lazy();
+        let query = lf.clone().with_column(
+            col("x").replace(lit(bad_binary.clone()), lit(new_values.clone())),
+        );
+        match make_stable_lazyframe(domain.clone(), FrameDistance(SymmetricDistance), query) {
+            Ok(t) => match t.invoke(&lf)?.collect() {
+                Ok(df) => panic!("unexpected successful invalid UTF-8 replacement: {df:?}"),
+                Err(e) => eprintln!("BINARY_PROBE_INVALID_UTF8: DEFERRED_ERROR: {e}"),
+            },
+            Err(e) => eprintln!("BINARY_PROBE_INVALID_UTF8: EARLY_REJECTED: {e}"),
+        }
+    }
+    Ok(())
+}
