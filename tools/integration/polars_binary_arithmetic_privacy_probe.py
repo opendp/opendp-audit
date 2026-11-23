@@ -52,6 +52,7 @@ def probe_case(case):
                 data=data,
                 privacy_unit=dp.unit_of(contributions=1),
                 privacy_loss=dp.loss_of(epsilon=1.0),
+                margins=[dp.polars.Margin(max_length=1)],
             )
             # Clip the arithmetic expression to make a bounded private sum.
             sanitized = expr.fill_null(0).clip(-5, 5)
