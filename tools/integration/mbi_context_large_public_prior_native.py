@@ -46,8 +46,102 @@ def neighbor(add_record=False):
     })
 
 
+def verify_context_selection_privacy_gap(table, algorithm_type):
+    """Compute exact source selection event probabilities on 3-bin marginals."""
+    from itertools import permutations
+    from math import exp, log
+    from opendp.extras.mbi._utilities import typed_dict_domain, typed_dict_distance
+    from opendp.extras.mbi._mst import _make_mst_scores
+    from opendp.extras.mbi._aim import _make_aim_scores
+    from opendp.mod import binary_search
+
+    model = table.model
+    cliques = (
+        (("A", "B"), ("A", "C"), ("B", "C"))
+        if algorithm_type == "MST" else (("A",), ("B",))
+    )
+    domain = typed_dict_domain({
+        clique: dp.numpy.arrayd_domain(shape=(3,) * len(clique), T="i32")
+        for clique in cliques
+    })
+    metric = typed_dict_distance(
+        dp.l01inf_distance(dp.absolute_distance(T="i32"))
+    )
+    d_in = {clique: (1, 1, 1) for clique in cliques}
+
+    # Build exactly the indexed marginals produced by one 010 insertion.
+    before, after = {}, {}
+    inserted = {"A": 0, "B": 1, "C": 0}
+    for clique in cliques:
+        first = np.zeros((3,) * len(clique), dtype=np.int32)
+        first[(0,) * len(clique)] = 4
+        second = first.copy()
+        second[tuple(inserted[c] for c in clique)] += 1
+        before[clique], after[clique] = first, second
+
+    if algorithm_type == "MST":
+        scorer = _make_mst_scores(domain, metric, cliques, model)
+    else:
+        # d_measure=0.5, marginal L1=1, pure-DP scale=2 per cell.
+        # Thus each public expectation is 2 and the full penalty is 6.
+        scorer = _make_aim_scores(
+            domain, metric, [Count(c) for c in cliques],
+            {c: 2.0 for c in cliques}, model,
+        )
+
+    scores0 = np.asarray(scorer(before), dtype=np.float64)
+    scores1 = np.asarray(scorer(after), dtype=np.float64)
+    bound = scorer.map(d_in)
+    assert bound == 1.0
+    print("Context", algorithm_type, "scores before", scores0.tolist(),
+          "after", scores1.tolist(), "delta", (scores1 - scores0).tolist(),
+          "claimed sensitivity", bound, flush=True)
+
+    # As in _make_aim_marginal and MST.make_marginals: first-round budget
+    # split 50/50, twice rounded down before private selection.
+    d_select = float(np.nextafter(np.nextafter(0.5, -np.inf), -np.inf))
+    scale = binary_search(
+        lambda x: x > 0 and (
+            scorer >> dp.m.then_noisy_max(
+                output_measure=dp.max_divergence(), scale=x
+            )
+        ).check(d_in, d_select),
+        bounds=(0.0, None),
+        T=float,
+    )
+
+    def selection_probability(scores, idx):
+        maximum = max(scores)
+        probs = [exp((float(v) - maximum) / scale) for v in scores]
+        count, total = 0.0, 0.0
+        for order in permutations(range(len(scores))):
+            reaches = 1.0
+            for candidate in order:
+                if candidate == idx:
+                    count += reaches * probs[idx]
+                    break
+                reaches *= 1.0 - probs[candidate]
+            total += 1.0
+        return count / total
+
+    # Pick the score that is strictly lower only on the second dataset;
+    # it is exposed by Marginals.cliques() in the Context release.
+    differences = scores1 - scores0
+    selected_index = int(np.argmin(differences))
+    p0 = selection_probability(scores0, selected_index)
+    p1 = selection_probability(scores1, selected_index)
+    log_ratio = log(p0 / p1)
+    print("Context", algorithm_type, "selection scale", scale,
+          "exposed event", cliques[selected_index],
+          "probabilities", p0, p1, "log ratio", log_ratio,
+          "overall claimed epsilon", 1.0, flush=True)
+    assert log_ratio > 1.0
+    return log_ratio
+
+
 def run_algorithm(algorithm_type):
     table = make_public_table()
+    verify_context_selection_privacy_gap(table, algorithm_type)
 
     def keep_public_model(domain, marginals, *, potentials=None):
         assert domain.config == table.model.domain.config
