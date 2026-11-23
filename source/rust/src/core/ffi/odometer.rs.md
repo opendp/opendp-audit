@@ -50,7 +50,7 @@ Both public query endpoints are `extern "C"` functions. After validating that th
 
 This is a concrete **source-level invalid-type process-termination defect**, reported in [audit candidate #104](https://github.com/opendp/opendp-audit/issues/104). It affects invalid FFI calls and may be a robustness/availability issue; there is **no shown secret-dependent crash, privacy-budget undercount, or DP violation**. An ordinary mismatched but clone-supported `i32` invokes the normal `FailedCast` path, so the bug is specifically the prevalidation clone.
 
-The [dedicated Rust regression](https://github.com/opendp/opendp-audit/blob/main/tools/integration/odometer_ffi_clone_panic.rs) tests both C entrypoints in separate child processes and contrasts supported wrong-type behavior. The [pinned CI workflow](https://github.com/opendp/opendp-audit/blob/main/.github/workflows/odometer-ffi-clone-panic.yml) compiles against upstream `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` with `contrib,ffi`; the native result was pending when this report was written. No compiled OpenDP reproduction is claimed yet.
+The [dedicated Rust regression](https://github.com/opendp/opendp-audit/blob/main/tools/integration/odometer_ffi_clone_panic.rs) tests both C entrypoints in separate child processes and contrasts supported wrong-type behavior. [Native CI run 45112277828](https://github.com/opendp/opendp-audit/actions/runs/45112277828) compiled the pinned OpenDP revision `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` with `contrib,ffi` and **passed 2/2 tests**: an invalid but clone-supported `i32` invoke query returned `FfiResult::Err`, while both unsupported `()` query types triggered the expected process termination across `extern "C"` (observed from subprocesses). This is native confirmation of the malformed-input availability defect, not a claim about privacy loss.
 
 ### Pointer and FFI boundaries
 
@@ -60,12 +60,12 @@ Upstream [PR #3277](https://github.com/opendp/opendp/pull/3277) addresses wrappe
 
 ## Findings
 
-- **New source-level defect, candidate #104:** Unsupported opaque invoke/distance query types can panic inside `AnyObject::clone` before the ordinary fallible query validation; both extern-C functions expose a potential process-abort boundary. Native regression launched; status pending as written.
+- **New source-level defect, candidate #104:** Unsupported opaque invoke/distance query types can panic inside `AnyObject::clone` before the ordinary fallible query validation; both extern-C functions expose a potential process-abort boundary. Native regression confirmed by [pinned CI 45112277828](https://github.com/opendp/opendp-audit/actions/runs/45112277828) (two tests passed).
 - **No additional accounting defect established:** Supported query types reach the existing stateful odometer transitions, and internal type introspection has an explicit type-only fast path. This is not a proof of arbitrary callbacks' validity or of all language bindings.
-- **Deduplication:** Searches of upstream and audit issues/PRs found no existing report or pending correction of this exact odometer FFI clone failure. Scope does not overlap [non-adaptive composition task #96](https://github.com/opendp/opendp-audit/issues/96).
+- **Deduplication:** [Cross-file investigation](../../../../../investigations/ffi-opaque-clone-before-validation.md) consolidates three additional constructors with the same prevalidation-clone pattern. Searches of upstream and audit issues/PRs found no existing report or pending correction of this exact odometer FFI clone failure. Scope does not overlap [non-adaptive composition task #96](https://github.com/opendp/opendp-audit/issues/96).
 
 ## Next checks
 
-1. Check the pinned native Actions result and distinguish compiler failure from reproduction failure; update #104 with executed evidence.
+1. Extend the successful native witness to the three additional source-identified FFI constructors; keep #104 as the single root-cause candidate.
 2. Introduce an upstream regression expecting **`FfiResult::Err`, not process abort**, for unsupported `AnyObject` query/distance payloads. Implement fallible cloning or validate the payload before copying, without bypassing the original stateful odometer transition.
 3. Exercise both type-introspection calls and queryable pointer lifetime across R/Python bindings, including user-defined distance types and interposed recursive wrappers.
