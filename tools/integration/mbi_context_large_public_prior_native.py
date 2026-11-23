@@ -79,6 +79,11 @@ def verify_context_selection_privacy_gap(table, algorithm_type):
         second[tuple(inserted[c] for c in clique)] += 1
         before[clique], after[clique] = first, second
 
+    # Native TypedDictDomain membership is supported even though Polars
+    # LazyFrameDomain.member intentionally is not implemented under FFI.
+    assert domain.member(before), "original marginal dictionary outside domain"
+    assert domain.member(after), "neighbor marginal dictionary outside domain"
+
     if algorithm_type == "MST":
         scorer = _make_mst_scores(domain, metric, cliques, model)
     else:
