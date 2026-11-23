@@ -30,7 +30,7 @@ def main():
     valid_new = pl.Series("new", ["replacement"], dtype=pl.String)
     for values in [["a"], ["unrelated"]]:
         expr = pl.col("x").replace(invalid_old, valid_new)
-        lf = pl.DataFrame({"x": values}).lazy().with_column(expr)
+        lf = pl.DataFrame({"x": values}).lazy().with_columns(expr)
         try:
             value = lf.collect()["x"].to_list()
             print(f"PUBLIC_CAST_PROBE INVALID_UTF8: EXEC_OK INPUT={values!r} OUTPUT={value!r}")
