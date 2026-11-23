@@ -46,7 +46,7 @@ This is **analytical reproduction of the distributional contradiction**, not a r
 
 **Numerical privacy-accounting discrepancy on upstream `main`; pending upstream fix.** Severity: **low in absolute leakage**, but it breaks an exact epsilon-zero privacy claim under the stated sampler contracts. The issue is already covered by draft [PR #3257](https://github.com/opendp/opendp/pull/3257), which detects the floating-point reciprocal boundary, takes a direct uniform-draw path, and adds the three-category regression test. The PR is **open and unmerged** as of this audit; the fix is not present on the reviewed `main` revision.
 
-Existing upstream [issue #2065](https://github.com/opendp/opendp/issues/2065) and [PR #2110](https://github.com/opendp/opendp/pull/2110) concern review of the mechanism. [Issue #2930](https://github.com/opendp/opendp/issues/2930) concerns bit-vector randomized response, not this boundary. No new defect issue was created. Work was not exclusively claimed because audit-task issue creation is outside the user's allowed GitHub actions.
+Existing upstream [issue #2065](https://github.com/opendp/opendp/issues/2065) and [PR #2110](https://github.com/opendp/opendp/pull/2110) concern review of the mechanism. [Issue #2930](https://github.com/opendp/opendp/issues/2930) concerns bit-vector randomized response, not this boundary. This confirmed analytical finding is tracked in [audit issue #2](https://github.com/opendp/opendp-audit/issues/2). No audit-task issue was created, so this work has no exclusive lease.
 
 ## Unresolved questions
 
