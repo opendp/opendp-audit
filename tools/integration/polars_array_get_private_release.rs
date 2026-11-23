@@ -91,7 +91,7 @@ fn private_release_exposes_oob_status_for_get_false() -> Fallible<()> {
         .collect()
         .expect_err("out-of-bounds private index should be observable");
     assert!(
-        failure.to_string().contains("out of bounds"),
+        format!("{failure:?}").contains("out of bounds"),
         "unexpected error for private index 2: {failure:?}"
     );
     Ok(())
