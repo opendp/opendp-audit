@@ -17,6 +17,7 @@ from opendp.extras.mbi._utilities import (
 )
 from opendp.extras.mbi._mst import _make_mst_scores, _make_mst_select
 from opendp.extras.mbi._aim import _make_aim_scores, _make_aim_select
+from opendp.extras.mbi import AIM, MST, Marginals
 
 
 TOTAL = float(2**55 + 16)
@@ -176,6 +177,32 @@ def sample_actual_selection_constructors():
     assert tuple(aim_result) in aim_cliques
 
 
+
+def sample_public_algorithm_entrypoints():
+    """Check public algorithm methods admit the model; no full table release."""
+    model = model_with_concentrated_public_joint()
+    input_domain = dp.lazyframe_domain([
+        dp.series_domain(col, dp.atom_domain(T="u32", bounds=(0, 1)))
+        for col in ("A", "B", "C")
+    ])
+    input_metric = dp.frame_distance(dp.symmetric_distance())
+    distance = [dp.polars.Bound(per_group=1)]
+    for algorithm in (
+        MST(num_selections=1, measure_split=0.5),
+        AIM(queries=[Count(("A",)), Count(("B",))], rounds=1, measure_split=0.5),
+    ):
+        # The model is an explicit public parameter at this API boundary.
+        measurement = algorithm.make_marginals(
+            input_domain, input_metric, dp.max_divergence(),
+            d_in=distance, d_out=1.0,
+            marginals=Marginals(), model=model,
+        )
+        loss = measurement.map(distance)
+        print("Public algorithm entrypoint accepted:", type(algorithm).__name__,
+              "epsilon", loss, flush=True)
+        assert loss <= 1.0
+
+
 if __name__ == "__main__":
     print("OpenDP", getattr(dp, "__version__", "unknown"),
           "NumPy", np.__version__, "MBI", getattr(mbi, "__version__", "unknown"),
@@ -184,3 +211,4 @@ if __name__ == "__main__":
     print("MST ratio / epsilon:", sample_mst(), flush=True)
     print("AIM ratio / epsilon:", sample_aim(), flush=True)
     sample_actual_selection_constructors()
+    sample_public_algorithm_entrypoints()
