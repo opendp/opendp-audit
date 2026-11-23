@@ -20,7 +20,7 @@ For the warning side channel, the observer is a Python caller who can capture wa
 - [`_rows_within_norm`](https://github.com/opendp/opendp/blob/a010591f55b1713c926f8e355091471634480307/python/src/opendp/extras/numpy/_norm.py): computes scaled row norm and compares against a public norm bound without squaring it.
 - [`make_private_np_eigendecomposition`](https://github.com/opendp/opendp/blob/a010591f55b1713c926f8e355091471634480307/python/src/opendp/extras/sklearn/_make_eigendecomposition/__init__.py): constructs the SSCP transformation as `t_sscp`, composes it before private eigenvalue and eigenvector mechanisms.
 - [`make_eigenvalues`](https://github.com/opendp/opendp/blob/a010591f55b1713c926f8e355091471634480307/python/src/opendp/extras/sklearn/_make_eigenvalues/__init__.py) applies `np.linalg.eigvalsh` to intermediate SSCP matrices; it expects a finite matrix domain.
-- [Audit issue #156](https://github.com/opendp/opendp-audit/issues/156), [task #155](https://github.com/opendp/opendp-audit/issues/155), [standalone regression](https://github.com/opendp/opendp-audit/blob/main/tools/tests/test_numpy_sscp_float32_overflow_model.py).
+- [Audit issue #168](https://github.com/opendp/opendp-audit/issues/168), [task #155](https://github.com/opendp/opendp-audit/issues/155), [standalone regression](https://github.com/opendp/opendp-audit/blob/main/tools/tests/test_numpy_sscp_float32_overflow_model.py).
 
 ## Reasoning and evidence
 
@@ -61,7 +61,7 @@ If the standard NumPy warning or the configured `FloatingPointError` escapes the
 - [Audit #141](https://github.com/opendp/opendp-audit/issues/141): NumPy `float32` **summation** overflow under row-bound sensitivity; distinct implementation, albeit the same general unsafe narrow arithmetic class.
 - [Audit #115](https://github.com/opendp/opendp-audit/issues/115): the old `_sscp_domain` accepts **fabricated overlarge finite PSD matrices**; resolved as pending [upstream PR #3281](https://github.com/opendp/opendp/pull/3281). That finding does not involve genuine bounded dataset execution or warnings.
 - Upstream [PR #3281](https://github.com/opendp/opendp/pull/3281), open/draft, changes the matrix domain and metric but **retains `lambda arg: arg.T @ arg`**. Its new bound checks compute `row_norm_sq = input_desc.norm * input_desc.norm` and require it be finite; `1e42` passes this f64-style check, while the actual `float32` matrix multiplication still overflows. The PR thus does not address this witness. Other pending PCA PRs were checked for an equivalent repair, and upstream/audit issues were searched for SSCP float32 execution overflow.
-- No upstream OpenDP issue/PR was identified that fixes the data-dependent matrix-multiplication overflow. [Candidate defect #156](https://github.com/opendp/opendp-audit/issues/156) is therefore recorded as **Unreported** on the reviewed main revision, not fixed by the draft refactor.
+- No upstream OpenDP issue/PR was identified that fixes the data-dependent matrix-multiplication overflow. [Candidate defect #168](https://github.com/opendp/opendp-audit/issues/168) is therefore recorded as **Unreported** on the reviewed main revision, not fixed by the draft refactor.
 
 ## Findings
 
