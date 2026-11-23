@@ -1,0 +1,65 @@
+name: Candidate defect
+description: Track a suspected OpenDP defect, including an unverified hypothesis
+title: "[candidate] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository accepts speculative candidates. State uncertainty explicitly.
+        Check existing audit issues and upstream OpenDP issues/PRs before creating a duplicate.
+        For sensitive security vulnerabilities, follow OpenDP's security reporting policy.
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Suspected defect
+      description: What invariant might fail, and under what conditions?
+      placeholder: "Under ..., the code may violate ... because ..."
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: OpenDP revision
+      description: Full commit SHA or branch; avoid claiming the bug affects current main without checking
+      placeholder: "commit SHA or ref"
+    validations:
+      required: false
+  - type: textarea
+    id: scope
+    attributes:
+      label: Affected code and audit links
+      description: Paths, qualified symbols, and relevant source audits or investigations
+    validations:
+      required: false
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence / reproduction
+      description: Tests, reasoning trace, counterexample, or why it is not yet verified
+    validations:
+      required: false
+  - type: dropdown
+    id: confidence
+    attributes:
+      label: Verification state
+      options:
+        - Candidate (unverified)
+        - Reproduced
+        - Confirmed
+        - Upstream-ready
+    validations:
+      required: false
+  - type: textarea
+    id: prior
+    attributes:
+      label: Related audit issues, upstream issues and PRs
+      description: Include possible duplicates, pending fixes, and main-branch status
+    validations:
+      required: false
+  - type: textarea
+    id: impact
+    attributes:
+      label: Potential impact and next check
+      description: Privacy, correctness, safety, utility, usability, performance, and the next decisive verification step
+    validations:
+      required: false
