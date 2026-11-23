@@ -26,7 +26,7 @@ updated: 2026-11-22
 
 **Executed:** A Python 3 binary64/integer model independently reproduced the `exp == 64` result, including nearby `total_limit` values `7e17` (exponent 63) and `8e17` (exponent 64). The resulting integer is within `u64`, so the witness does not require saturating casts. The audit validator and eight validator unit tests passed locally. **Not executed:** compiled OpenDP, FFI, or a Rust debug/release boundary regression.
 
-**Impact:** Low-severity constructor availability/robustness issue from public parameters, not a demonstrated privacy leak or inaccurate DP map. A requested `2^64`-sized projection cannot be supported, so fallible parameter rejection is appropriate. Existing upstream tests only check exponents for inputs 1, 2, 3, and 7. Checks of audit/upstream issues and PRs found no equivalent tracked fix; no new issue was created in this run.
+**Impact:** Low-severity constructor availability/robustness issue from public parameters, not a demonstrated privacy leak or inaccurate DP map. A requested `2^64`-sized projection cannot be supported, so fallible parameter rejection is appropriate. Existing upstream tests only check exponents for inputs 1, 2, 3, and 7. No equivalent upstream issue or corrective PR was found; this finding is now tracked in [audit issue #6](https://github.com/opendp/opendp-audit/issues/6) (upstream disposition **Unreported**).
 
 ### Nonfinite parameter panic
 

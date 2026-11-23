@@ -49,4 +49,4 @@ This gives a plausible and specifically cited argument for the pure-DP concurren
 - Check `InfCast`'s concrete `FBig` to `f64` conversion and add upstream boundary-case Rust tests for outward rounding and overflow if coverage is absent.
 - Inspect other `CompositionMeasure` implementations and all caller paths for invalid signed or non-finite privacy distances; the summation result above is conditional on valid inputs.
 
-No candidate defect was confirmed within the reviewed scope. GitHub audit-task and candidate-defect issues were not created because this run's instructions prohibit opening issues.
+No differential-privacy violation was confirmed within the reviewed scope. The independent source/proof artifact mismatch is tracked as [audit issue #18](https://github.com/opendp/opendp-audit/issues/18); upstream disposition remains **Unreported**.

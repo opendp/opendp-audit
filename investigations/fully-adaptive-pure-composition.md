@@ -29,7 +29,7 @@ For a fixed input distance and threshold `E >= 0`, a fully adaptive `MaxDivergen
 
 ## Findings
 
-A concrete **proof artifact mismatch** exists, tracked as [audit issue #20](https://github.com/opendp/opendp-audit/issues/20). No privacy failure was confirmed within this scope. The theorem supports the intended behavior conditional on valid child maps, finite communication, and faithful odometer semantics. **Upstream disposition: unreported; no matching corrective PR found.**
+A concrete **proof artifact mismatch** exists, tracked as [audit issue #18](https://github.com/opendp/opendp-audit/issues/18). No privacy failure was confirmed within this scope. The theorem supports the intended behavior conditional on valid child maps, finite communication, and faithful odometer semantics. **Upstream disposition: unreported; no matching corrective PR found.**
 
 ## Unresolved questions
 
