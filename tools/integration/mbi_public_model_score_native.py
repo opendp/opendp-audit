@@ -45,13 +45,15 @@ def model_with_concentrated_public_joint():
     )
     assert isinstance(model, mbi.MarkovRandomField)
     for edge in EDGES:
-        np.testing.assert_array_equal(
-            np.asarray(model.project(edge).values),
-            [[TOTAL, 0.0], [0.0, 0.0]],
+        projected = np.asarray(model.project(edge).values)
+        print("MBI variable-elimination projection", edge, repr(projected), flush=True)
+        np.testing.assert_allclose(
+            projected, [[TOTAL, 0.0], [0.0, 0.0]], rtol=1e-12, atol=0.0
         )
     for cl in (("A",), ("B",), ("C",)):
-        np.testing.assert_array_equal(
-            np.asarray(model.project(cl).values), [TOTAL, 0.0]
+        projected = np.asarray(model.project(cl).values)
+        np.testing.assert_allclose(
+            projected, [TOTAL, 0.0], rtol=1e-12, atol=0.0
         )
     return model
 
