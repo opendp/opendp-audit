@@ -1,0 +1,27 @@
+name: Probe Polars private integer arithmetic error channels
+
+on:
+  push:
+    paths:
+      - '.github/workflows/polars-binary-arithmetic-probe.yml'
+      - 'tools/integration/polars_binary_arithmetic_privacy_probe.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-polars-arithmetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install version-pinned binary dependencies
+        run: |
+          python -m pip install 'opendp==0.16.0a20261122001' 'polars==1.36.1'
+      - name: Probe raw Polars, certified stable transforms, and private releases
+        run: |
+          python -u tools/integration/polars_binary_arithmetic_privacy_probe.py
