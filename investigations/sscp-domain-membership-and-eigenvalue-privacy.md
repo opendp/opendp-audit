@@ -57,6 +57,10 @@ Under ideal independent `Laplace(scale=1)` noise on the two eigenvalues, the eve
 
 **Source-confirmed domain contract violation with an independently reproduced counterexample.** The missing membership constraint is unreported in targeted open/closed upstream issue and PR searches at the reviewed revision. Its possible privacy consequence requires **direct lower-level construction** from an `NPSSCPDomain`; the normal bounded-input `make_np_sscp` flow is not shown vulnerable. Keep this separate from the projection amplification in [audit #110](https://github.com/opendp/opendp-audit/issues/110) and nonzero origin in [upstream #2952](https://github.com/opendp/opendp/issues/2952).
 
+## Pending upstream repair
+
+[OpenDP draft PR #3281](https://github.com/opendp/opendp/pull/3281), reviewed at head `01cd7460894ebfade7066750e9a4b9313278cf42`, explicitly addresses this modeling defect. It replaces the SSCP domain with a finite symmetric matrix domain with no asserted latent row norm or dataset size; introduces a nuclear-norm metric; bounds `make_np_sscp` sensitivity from its actual bounded row input; and changes `make_eigenvalues` to identity-stable under the nuclear norm. The counterexample matrices have input nuclear-norm distance 16, not row-level symmetric distance 2, so the reported violation does not transfer to this proposed design. The PR targets `sklearn-pca` and remains draft/unmerged at review. Previous "unreported" classification was incorrect because this existing PR was missed.
+
 ## Unresolved questions
 
 1. Execute a pinned OpenDP integration for `domain.member(C1)`, `make_eigenvalues(...).map(2)`, and the actual function output. Assess any unexpected extrinsic-domain or metric limitations.
