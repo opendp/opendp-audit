@@ -20,7 +20,7 @@ updated: 2026-11-23
 | `make_np_sscp` | correctness/sscp-output-domain-closure | Audited | `a010591f55b1713c926f8e355091471634480307` | [Rank-one numerical output](#rank-one-numerical-output); [investigation](../../../../../../../investigations/numpy-sscp-gram-psd-roundoff.md); [model](../../../../../../../tools/tests/test_sscp_gram_psd_rounding_model.py). |
 | `make_np_sscp` | privacy/numerical-metric-conservatism | Partial | `a010591f55b1713c926f8e355091471634480307` | [Privacy and upstream disposition](#privacy-and-upstream-disposition); neither the rounded Gram matrix's metric distance nor the end-to-end PCA release was verified. |
 
-| `make_np_sscp` | correctness/sscp-float32-overflow | Audited | `a010591f55b1713c926f8e355091471634480307` | [Bounded float32 overflow](#bounded-float32-overflow-and-warning); [issue #156](https://github.com/opendp/opendp-audit/issues/156) — genuine valid inputs can yield nonfinite SSCP output. |
+| `make_np_sscp` | correctness/sscp-float32-overflow | Audited | `a010591f55b1713c926f8e355091471634480307` | [Bounded float32 overflow](#bounded-float32-overflow-and-warning); [issue #168](https://github.com/opendp/opendp-audit/issues/168) — genuine valid inputs can yield nonfinite SSCP output. |
 | `make_np_sscp` | privacy/pre-noise-warning | Partial | `a010591f55b1713c926f8e355091471634480307` | [Bounded float32 overflow](#bounded-float32-overflow-and-warning); standalone data-dependent NumPy warning/error reproduced, native OpenDP propagation not checked. |
 
 ## Analysis
@@ -49,7 +49,7 @@ The source uses ordinary `lambda arg: arg.T @ arg` with no dtype widening or ove
 
 **Pending PR:** [#3281](https://github.com/opendp/opendp/pull/3281) replaces the matrix domain/metric but leaves `arg.T @ arg` in the input `float32` dtype. Its `row_norm_sq` finite check uses a Python float; `(1e21)**2 = 1e42` remains finite there, but squaring `1e20` overflows `float32`. Thus that PR does **not** fix this counterexample. The older [audit #115](https://github.com/opendp/opendp-audit/issues/115) and the rank-one counterexample above are distinct from this overflow issue.
 
-**Evidence:** [Issue #156](https://github.com/opendp/opendp-audit/issues/156), [cross-file investigation](https://github.com/opendp/opendp-audit/blob/main/investigations/numpy-sscp-float32-overflow-warning.md), [standalone four-test regression](https://github.com/opendp/opendp-audit/blob/main/tools/tests/test_numpy_sscp_float32_overflow_model.py). The native FFI/callback and full PCA release were not executed.
+**Evidence:** [Issue #168](https://github.com/opendp/opendp-audit/issues/168), [cross-file investigation](https://github.com/opendp/opendp-audit/blob/main/investigations/numpy-sscp-float32-overflow-warning.md), [standalone four-test regression](https://github.com/opendp/opendp-audit/blob/main/tools/tests/test_numpy_sscp_float32_overflow_model.py). The native FFI/callback and full PCA release were not executed.
 
 ## Next checks
 
