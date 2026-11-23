@@ -42,7 +42,7 @@ These checks establish the audited constructor and literal-bound **source contro
 
 For ordered real values and public `L <= U`, the clamp `c(x)=min(max(x,L),U)` is 1-Lipschitz: `|c(x)-c(y)| <= |x-y|`. Rowwise application is nonexpansive under appropriate event-level metrics and preserves row count, conditional on runtime equivalence to this mathematical operation and admissible null/NaN behavior. This supports, but does not completely certify, the identity stability-map construction.
 
-[Independent standard-library Python model tests](../../../../../../../tools/tests/test_polars_clip_bound_contract_model.py) passed **4 unit tests**, including **300 deterministic integer pairs** and **300 deterministic finite binary64 pairs** checked for nonexpansiveness and idempotence. Other cases cover reversed/NaN bounds and null/NaN inputs under the reference model. They do **not** execute OpenDP or Polars and must not be used to assert Polars' handling of NaN or any private-data-dependent runtime failure.
+[Independent standard-library Python model tests](../../../../../../tools/tests/test_polars_clip_bound_contract_model.py) passed **4 unit tests**, including **300 deterministic integer pairs** and **300 deterministic finite binary64 pairs** checked for nonexpansiveness and idempotence. Other cases cover reversed/NaN bounds and null/NaN inputs under the reference model. They do **not** execute OpenDP or Polars and must not be used to assert Polars' handling of NaN or any private-data-dependent runtime failure.
 
 **Disposition:** No new defect was established within the reviewed source-level guards and mathematical model. No duplicate defect issue was created.
 
