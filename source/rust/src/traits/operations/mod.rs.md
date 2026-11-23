@@ -18,8 +18,8 @@ updated: 2026-11-23
 | --- | --- | --- | --- | --- |
 | `TotalOrd::total_clamp` | correctness/invalid-bounds-error | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Existing constructor source coverage](../../transformations/lipschitz_mul/mod.rs.md) |
 
-| `CheckAtom::check_member` | correctness/bounded-scalar-membership | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Bounded scalar analysis](#bounded-scalar-membership) and [issue #100](https://github.com/opendp/opendp-audit/issues/100). |
-| `CheckAtom::is_bounded` | correctness/bounded-scalar-membership | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Bounded scalar analysis](#bounded-scalar-membership); simple scalar implementations retain the default error. |
+| `CheckAtom::check_member` | correctness/bounded-scalar-membership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Bounded scalar analysis](#bounded-scalar-membership) and [issue #100](https://github.com/opendp/opendp-audit/issues/100). |
+| `CheckAtom::is_bounded` | correctness/bounded-scalar-membership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Bounded scalar analysis](#bounded-scalar-membership); simple scalar implementations retain the default error. |
 
 ## Analysis
 
@@ -41,6 +41,8 @@ Native constructor and invocation regressions for the caller. No change to `Tota
 
 **Conclusion:** `check_member` invokes `is_bounded` for non-null values whenever bounds are present. Numeric implementations override `is_bounded` using `Bounds::member`, but `impl_CheckAtom_simple!(bool String char &str)` retains the error-returning default. [`AtomDomain::new_closed`](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/domains/mod.rs) accepts these scalar types without checking for that implementation.
 
-**Evidence:** Source trace, [cross-file investigation](../../../../../investigations/bounded-atom-domain-scalar-membership.md), and [candidate defect #100](https://github.com/opendp/opendp-audit/issues/100). Native compilation not yet claimed; no demonstrated privacy loss.
+**Evidence:** Source trace, [cross-file investigation](../../../../../investigations/bounded-atom-domain-scalar-membership.md), and [candidate defect #100](https://github.com/opendp/opendp-audit/issues/100). Pinned native CI reproduced the behavior (2 tests passed); no demonstrated privacy loss.
 
-**Limitations:** No custom `CheckAtom` types or non-scalar carriers were reviewed. Execute native regression and decide whether to implement or reject bounded simple scalar domains.
+**Limitations:** No custom `CheckAtom` types or non-scalar carriers were reviewed. Decide whether to implement or reject bounded simple scalar domains.
+
+**Native verification (2026-11-23):** [Pinned OpenDP CI](https://github.com/opendp/opendp-audit/actions/runs/45112011556) executed `cargo test --no-default-features --features contrib --test bounded_atom_domain_membership` at `ef1a238634d6196b01a1a1e77d3d5ad2340e3094`: **2 passed, 0 failed**, including all simple-scalar witnesses and numeric/unbounded controls. Verification for [issue #100](https://github.com/opendp/opendp-audit/issues/100) is **Reproduced**. This does not establish privacy impact.
