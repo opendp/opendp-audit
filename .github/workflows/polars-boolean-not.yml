@@ -1,0 +1,25 @@
+name: Verify Polars boolean Not dtype at pinned executor version
+
+on:
+  push:
+    paths:
+      - '.github/workflows/polars-boolean-not.yml'
+      - 'tools/integration/polars_boolean_not_dtype.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-polars:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned Polars
+        run: python -m pip install 'polars==1.36.1'
+      - name: Check Not output-type support
+        run: python tools/integration/polars_boolean_not_dtype.py
