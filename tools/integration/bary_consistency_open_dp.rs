@@ -54,3 +54,34 @@ fn f64_max_to_f64_returns_nan_leaves_in_pinned_opendp() -> Fallible<()> {
     );
     Ok(())
 }
+
+#[test]
+fn already_consistent_mixed_f64_scales_are_preserved_upstream() -> Fallible<()> {
+    // Exact, already-consistent breadth-first binary tree:
+    // root=M; parents=(M,0); leaves=(M,0,s,-s).
+    // Every parent equals the sum of its children in real arithmetic
+    // AND in f64. The least-squares projection must be the identity.
+    let m = f64::MAX;
+    let s = 1.0e-20_f64;
+    assert!(s.is_normal());
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    let leaves = post.eval(&vec![m, m, 0.0, m, 0.0, s, -s])?;
+    assert_eq!(leaves, vec![m, 0.0, s, -s]);
+    Ok(())
+}
+
+#[test]
+fn already_consistent_mixed_f64_scales_height_four_upstream() -> Fallible<()> {
+    // A 4-layer binary tree with eight leaves. The right grandchild
+    // subtree has small canceling leaves while the leftmost leaf is huge.
+    let m = f64::MAX;
+    let s = 1.0e-20_f64;
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    let observed = vec![
+        m, m, 0.0, m, 0.0, 0.0, 0.0,
+        m, 0.0, 0.0, 0.0, s, -s, 0.0, 0.0,
+    ];
+    let leaves = post.eval(&observed)?;
+    assert_eq!(leaves, vec![m, 0.0, 0.0, 0.0, s, -s, 0.0, 0.0]);
+    Ok(())
+}

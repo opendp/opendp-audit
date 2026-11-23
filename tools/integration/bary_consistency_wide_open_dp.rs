@@ -219,3 +219,36 @@ fn patched_200_complete_tree_inputs_match_independent_least_squares() -> Fallibl
     }
     Ok(())
 }
+
+#[test]
+fn normalized_patch_loses_small_leaves_of_consistent_mixed_scale_tree() -> Fallible<()> {
+    // Characterization test of an UNSOLVED regression in the CI-only patch.
+    // The exact input is internally consistent, so its unique LS projection
+    // is the original leaf vector [M, 0, s, -s].
+    let m = f64::MAX;
+    let s = 1.0e-20_f64;
+    let normalized_small = s / m;
+    assert_eq!(normalized_small, 0.0, "small leaf must underflow when scaled");
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    let leaves = post.eval(&vec![m, m, 0.0, m, 0.0, s, -s])?;
+    assert_eq!(leaves.len(), 4);
+    assert_eq!(leaves, vec![m, 0.0, 0.0, 0.0]);
+    assert_ne!(leaves, vec![m, 0.0, s, -s]);
+    Ok(())
+}
+
+#[test]
+fn normalized_patch_also_loses_small_leaves_of_height_four_tree() -> Fallible<()> {
+    // Same defect in a four-layer tree with eight leaves.
+    let m = f64::MAX;
+    let s = 1.0e-20_f64;
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    let observed = vec![
+        m, m, 0.0, m, 0.0, 0.0, 0.0,
+        m, 0.0, 0.0, 0.0, s, -s, 0.0, 0.0,
+    ];
+    let leaves = post.eval(&observed)?;
+    assert_eq!(leaves, vec![m, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+    assert_ne!(leaves, vec![m, 0.0, 0.0, 0.0, s, -s, 0.0, 0.0]);
+    Ok(())
+}
