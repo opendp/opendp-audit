@@ -51,4 +51,4 @@ updated: 2026-11-22
 - Guard empty `cumsum` in both postprocessors and require at least two bin edges when interior bins are needed; return a structured `Fallible` error for unsupported histogram shapes.
 - Explicitly reject NaN/non-finite quantile parameters and bin edges, and test partially ordered sequences.
 - Define and test handling of zero/negative total noisy counts; execute compiled upstream Rust/FFI regressions for all witnesses.
-- No GitHub issues or PRs were opened under the current run's restrictions.
+- **Audit defect issues:** [#12 — empty CDF / zero-total normalization](https://github.com/opendp/opendp-audit/issues/12), [#13 — singleton-edge histogram panic](https://github.com/opendp/opendp-audit/issues/13), and [#17 — NaN quantile/edge constructor bypass](https://github.com/opendp/opendp-audit/issues/17). These are **audit-repository reports**, not matching upstream issues; upstream disposition remains **Unreported**.
