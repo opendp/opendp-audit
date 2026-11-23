@@ -49,12 +49,20 @@ This is an intended-map underestimation, but **not a measured privacy breach of 
 
 Even if the callback's type is repaired, modular sum cannot safely be treated as an ordinary real/integer Lipschitz map. The actual represented-output difference here exceeds `i64::MAX`, so no `i64` distance value can bound this pair.
 
+## Native integration
+
+Actual OpenDP Python/FFI behavior is now independently verified in a version-pinned published nightly wheel, not merely inferred from source. [Signed native CI run](https://github.com/opendp/opendp-audit/actions/runs/45252295117) and [unsigned native CI run](https://github.com/opendp/opendp-audit/actions/runs/45252621850) both completed successfully using `opendp==0.16.0a20261122001` (reported `0.16.0-nightly.20261122.1`), Python 3.11 and NumPy 2.3.5.
+
+For each of `T=i64` and `T=u64`, both neighboring arrays are admitted by the real `domain.member`; `make_np_sum` constructs, and both `trans(data)` invocations return the exact modularly-wrapped sums from the source-equivalent calculations. For `T=i64`, `trans.map(2)` raises `TypeError: inferred type is f64, expected i64`; for `T=u64`, it raises the analogous `expected u64` error. The signed private sum measurement also constructs, but `measurement.map(2)` fails with the same FFI conversion error.
+
+The native wheel was built before the pinned upstream `a010591f55b1713c926f8e355091471634480307` revision, although the inspected helper source is unchanged. The evidence confirms the original arithmetic defect and type failure in a real deployed nightly, but **not** a native release certified with an insufficient epsilon. The separate [native probe](../tools/integration/numpy_int64_sum_native.py) and two CI run logs record the exact results.
+
 ## Duplicates and next work
 
 - [Audit #123](https://github.com/opendp/opendp-audit/issues/123) is narrow-integer accumulation dtype **promotion**, whereas `int64` retains dtype and wraps.
 - [Audit #141](https://github.com/opendp/opendp-audit/issues/141) is `float32` accumulation to Inf/NaN, not modular integer overflow.
 - [Upstream #458](https://github.com/opendp/opendp/issues/458) describes preexisting Rust constructor overflow safeguards, not this Python implementation.
 
-**Verification completed:** Exact source-equivalent NumPy sum, replicated domain membership, and map formula; the test runs independently of native OpenDP. **Open:** native callback return-type behavior, constructor rejection/acceptance, and downstream noise invocation under the same inputs.
+**Verification completed:** Exact source-equivalent NumPy sum, replicated domain membership, and map formula; the test runs independently of native OpenDP. **Now confirmed natively:** domain membership, both integer transformation invocations, the map type exception, and signed private measurement construction/map failure. **Still open:** a native certified privacy release (none is established), and a direct Rust build at the pinned upstream SHA.
 
 A safe repair must either certify that all permitted sums remain representable in the declared accumulator or use a different mathematically sound accumulation domain/noise model. A map-type correction alone is insufficient.
