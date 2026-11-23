@@ -13,6 +13,8 @@ updated: 2026-11-23
 - **Assumptions:** `idealized-numerics` and `contrib` enabled; well-formed arrays and supported integer input types for the first scope. The second scope uses float64 data, `size=None`, `p=2`, one column, public origin `[1e-200]`, public radius `1e-200` or `0`, and NumPy 2.3.5 semantics. Only independent NumPy calculations, not native OpenDP, were executed. The new third scope uses finite `float32` single-column rows of magnitude `1e38` in publicly fixed eight- or four-row datasets under NumPy 2.3.5; the Rust float-noise integerization behavior is modeled from pinned source.
 - **Source links:** [`make_np_sum`](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/python/src/opendp/extras/numpy/_make_np_sum/__init__.py), [domain implementation](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/python/src/opendp/extras/numpy/__init__.py), [FFI adapter](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/rust/src/internal/mod.rs), [FFI conversion](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/python/src/opendp/_convert.py), [proof](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/python/src/opendp/extras/numpy/_make_np_sum/make_np_sum.tex).
 
+- **Fourth audit scope:** The certified sized-array stability bound relies on `array2_domain` correctly enforcing its row norm when the public center is large and `T=i64`; this input-domain precondition fails because of lossy float64 integer promotion. See [cross-file investigation](../../../../../../../investigations/numpy-integer-origin-membership-sensitivity.md).
+
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
@@ -24,6 +26,8 @@ updated: 2026-11-23
 | `opendp.extras.numpy._make_np_sum.make_np_sum` | privacy/float32-sum-overflow-stability | Audited | `a010591f55b1713c926f8e355091471634480307` | [Floating overflow and sensitivity](#float32-sum-overflow-and-pre-noise-privacy); [investigation](../../../../../../../investigations/numpy-float32-sum-overflow-privacy.md); [privacy issue #141](https://github.com/opendp/opendp-audit/issues/141). |
 | `opendp.extras.numpy._make_np_sum.make_np_sum` | correctness/float32-sum-non-nan-output | Audited | `a010591f55b1713c926f8e355091471634480307` | [Floating overflow and sensitivity](#float32-sum-overflow-and-pre-noise-privacy); output `nan` contradicts `nan=False` intermediate vector domain. |
 | `opendp.extras.numpy._make_np_sum.make_private_np_sum` | privacy/float32-sum-prenoise-error | Partial | `a010591f55b1713c926f8e355091471634480307` | [Floating error side channel](#float32-sum-overflow-and-pre-noise-privacy); the source-equivalent NumPy callback errors, native FFI error observability not executed. |
+
+| `opendp.extras.numpy._make_np_sum.make_np_sum` | privacy/sized-integer-origin-domain-precondition | Partial | `a010591f55b1713c926f8e355091471634480307` | [False-positive input-domain membership exceeds sum stability](#sized-integer-origin-domain-precondition); [issue #145](https://github.com/opendp/opendp-audit/issues/145) and [investigation](../../../../../../../investigations/numpy-integer-origin-membership-sensitivity.md) |
 
 ## Analysis
 
@@ -64,6 +68,14 @@ A second valid adjacent pair `[v,v,v,-v]` versus `[v,v,v,v]`, `v=float32(1e38)`,
 Both input arrays satisfy the actual scaled norm membership predicate. Both emitted NumPy arrays retain dtype `int64`; this is separate from narrow integer dtype promotion. [Investigation](../../../../../../../investigations/numpy-int64-modular-sum.md), [standalone regression](../../../../../../../tools/tests/test_numpy_int64_sum_modular_overflow.py), [issue #143](https://github.com/opendp/opendp-audit/issues/143).
 
 **Verification:** Actual OpenDP nightly-wheel CI runs [i64](https://github.com/opendp/opendp-audit/actions/runs/45252295117) and [u64](https://github.com/opendp/opendp-audit/actions/runs/45252621850) confirmed both domain memberships, exact modular sum outputs, and `TypeError: inferred type is f64, expected i64/u64` from the real stability maps. In addition, an unsigned 16-row example produces `0` versus `15*2**60`, which is 7.5× the declared bound while the true output distance is representable in `u64`. Both map errors prevent a valid numeric epsilon certificate for these examples, so no end-to-end certified-DP violation is claimed. The native wheel predates the pinned upstream main revision but uses unchanged source here.
+
+### Sized integer-origin domain precondition
+
+**Conclusion:** The sized sum's proof assumes that the input domain's row-norm descriptor describes the **actual** `int64` rows accepted by `array2_domain._member`. This does not always hold when the public origin is nonzero and large. `array2_domain` casts an integer origin array to float64; its `x-origin` subtraction implicitly casts the row coordinates to float64 too, possibly erasing real integer differences. The sum callback still aggregates the original exact `int64` rows.
+
+**Counterexample:** `size=1`, `num_columns=1`, `T=i64`, `p=1`, `norm=1.0`, `origin=[2**60]`. Two admitted rows `[[2**60-64]]` and `[[2**60+128]]` each have an apparent centered float64 difference of zero. Their exact sized sums differ by `192` under a one-record substitution (`d_in=2`), while the map formula evaluates to `2.0`. This is **96×** the claimed sensitivity **without summation wraparound**, and is independent of both the unsized origin-norm underflow [#131](https://github.com/opendp/opendp-audit/issues/131) and integer accumulation overflow [#143](https://github.com/opendp/opendp-audit/issues/143).
+
+**Evidence and limitation:** [NumPy 2.3.5 source-equivalent regression](../../../../../../../tools/tests/test_numpy_integer_origin_membership_model.py), [cross-file investigation](../../../../../../../investigations/numpy-integer-origin-membership-sensitivity.md), and [privacy issue #145](https://github.com/opendp/opendp-audit/issues/145). Native FFI callbacks not executed. A **separate** potential Python-float-to-integer-metric callback type mismatch may prevent `make_np_sum.map` and its private wrapper from successfully releasing; the row-domain membership bug is proven at the source arithmetic level, but the complete private noise-chain violation remains conditional.
 
 ## Next checks
 
