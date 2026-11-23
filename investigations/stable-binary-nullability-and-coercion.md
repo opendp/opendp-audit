@@ -1,0 +1,60 @@
+---
+schema_version: 1
+upstream_commit: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
+updated: 2026-11-23
+status: Partial
+---
+
+# Polars binary-expression nullability and implicit coercions
+
+## Invariant and threat model
+
+A stable Polars binary expression is used in private query planning before privacy calibration. Incorrect output domain descriptors can leak through a downstream count (for example, nulls introduced by private zero denominators). Data-dependent casting exceptions can separately disclose private values by making releases fail only for some datasets.
+
+**Reviewed scope:** The rowwise binary expression constructor, explicit operator allowlist, nullability formula, temporal comparison restrictions, Enum/String behavior, and the numeric coercion helper. This is not an evaluation of all Polars optimizer passes or all possible operands.
+
+## Affected symbols and source audits
+
+- [Primary source audit](../source/rust/src/transformations/make_stable_expr/expr_binary/mod.rs.md) and [pinned constructor](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/transformations/make_stable_expr/expr_binary/mod.rs#L1).
+- [`SeriesDomain::new_from_field` nullability and membership](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/domains/polars/series/mod.rs#L1).
+- [`is_numeric_coercion` and reviewed cast allowlist](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/transformations/make_stable_expr/cast.rs#L1).
+- [`make_expr_cast` rejects unsafe casts](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/transformations/make_stable_expr/expr_cast/mod.rs#L1).
+- [Upstream binary-expression unit tests](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/transformations/make_stable_expr/expr_binary/test.rs#L1).
+
+## Reasoning and evidence
+
+### Nulls under valid inputs
+
+The binary constructor initializes `SeriesDomain::new_from_field`, which conservatively starts with a nullable output, then assigns the precise descriptor `left.nullable || right.nullable || matches!(op, FloorDivide | TrueDivide | Divide | Modulus)`. It overrides that descriptor to false for validity-aware equality operators. A non-nullable operand pair with a zero integer denominator is a decisive example: modulo or division can produce null despite no input null, so the four operators must stay nullable even without source nulls. The upstream regression test expressly covers this scenario.
+
+A small executed static reference check enumerated seven arithmetic operators (`Plus`, `Minus`, `Multiply`, `Divide`, `TrueDivide`, `FloorDivide`, `Modulus`) across both input-nullable bits (28 combinations). It verified the expected policy expression and confirmed the special conservative flag for the four zero-divisor-capable operations. The check is an independent policy algebra exercise, not a Polars behavior test. The Boolean validity operations were reviewed separately from source and upstream tests.
+
+### Data-dependent conversions and comparison failures
+
+The constructor rejects array and categorical operands, excludes unsupported operators, compares temporal dtypes exactly, and limits temporal operators to comparisons. An Enum/String *ordering* comparison is explicitly rejected because a private string not in the Enum's category set may error during evaluation. Enum/String *equality* is supported, with an upstream regression using an unknown category and comparing both operand directions. Unknown mixed dtypes outside numeric/boolean coercion and Enum/String equality are rejected.
+
+For supported numeric/boolean implicit coercion, `is_numeric_coercion` checks the two source datatype families; the output dtype is obtained via Polars `expr.to_field` rather than guessed. The upstream tests include Int64/UInt64 extremes, Float32/Float64 NaN and infinity, nullable operands, and dynamic literal combinations. These cases were read but not independently run.
+
+The general property that every allowed numeric implicit promotion and integer division is total and cannot raise a data-dependent exception is **not established** by this review; the exact linked Polars arithmetic and optimized plans should be tested before upgrading the privacy property to Audited.
+
+### Historical fixes and coordination
+
+- [Upstream #2940](https://github.com/opendp/opendp/issues/2940), a modulo-by-zero nullable-output privacy leak, is **fixed on main** through [merged PR #3051](https://github.com/opendp/opendp/pull/3051).
+- [Upstream #3218](https://github.com/opendp/opendp/issues/3218), a cross-datetime coercion nullable-output leak, is **fixed on main** through [merged PR #3220](https://github.com/opendp/opendp/pull/3220).
+- The broader previously reported [upstream #3093](https://github.com/opendp/opendp/issues/3093) concerns other query operations (`qcut` and integer `pow`), not a newly identified counterexample in this binary-expression review.
+
+All three upstream issues were closed. The accepted explicit guards for the two relevant problems appear in the inspected upstream revision. No duplicate audit defect issue was opened.
+
+### Verification limitations
+
+Static source/test examination and 11 source-guard assertions were executed through the connected GitHub repository; the source-policy arithmetic table covered 28 combinations. The local runtime lacks Polars and OpenDP, so no native Rust/Polars tests were executed. Static assertions do not establish dynamic compiler-version semantics, runtime arithmetic error behavior, or privacy guarantees.
+
+## Findings
+
+**No new defect established within the stated scope.** The two concrete historical privacy issues are fixed on upstream `main`. Output-nullability and data-dependent-failure properties remain **Partial** until runtime and implementation-level numerical exceptional cases are checked.
+
+## Unresolved questions
+
+- Verify non-nullability of `EqValidity`/`NotEqValidity` and the division/remainder null contract in the exact Polars dependency version under optimized execution.
+- Check signed-minimum/`-1` integer division and other arithmetic edge cases for data-dependent exceptions.
+- Extend review to other operations that can introduce nulls or errors via implicit casts or optimizer rewrites.
