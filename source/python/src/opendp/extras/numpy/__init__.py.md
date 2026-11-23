@@ -8,6 +8,8 @@ updated: 2026-11-23
 
 ## Scope and assumptions
 
+- **Additional independent scope:** Numerical false-negative membership in `_sscp_domain._member` for rank-deficient Gram matrices actually returned by `make_np_sscp`. Distinct from previously reported **false-positive** membership against `norm` and `size`. [Cross-file roundoff investigation](../../../../../../investigations/numpy-sscp-gram-psd-roundoff.md); pending PR #3281 would remove the strict PSD check.
+
 - **Audit scope:** `_sscp_domain` and its nested `_member` predicate, limited to the declared L2 row-norm and fixed dataset-size semantics for positive-semidefinite matrices. Other NumPy domains, the floating-point robustness of eigensolvers, and arbitrary `p` are not reviewed.
 - **Invariant:** If a domain advertises `C=X.T @ X` with `n` rows of norm at most `R`, each admitted matrix must satisfy the necessary bound `trace(C) <= n R^2` and `rank(C) <= n`. A downstream constructor must not use a metadata bound that domain membership fails to enforce.
 - **Assumptions:** `R=1`, `n=1`, `p=2`, `T=float` and `num_features=2`; all test matrices are finite exact diagonal binary64 values.
@@ -21,6 +23,7 @@ updated: 2026-11-23
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
 | `_sscp_domain` | privacy/sscp-norm-membership | Audited | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Source trace and counterexample](#analysis); [cross-file investigation](../../../../../../investigations/sscp-domain-membership-and-eigenvalue-privacy.md) and [audit #115](https://github.com/opendp/opendp-audit/issues/115). |
+| `_sscp_domain._member` | correctness/sscp-output-domain-closure | Audited | `a010591f55b1713c926f8e355091471634480307` | [Rank-one floating-point Gram matrix false negative](#sscp-rank-one-gram-matrix-numerical-false-negatives); [investigation](../../../../../../investigations/numpy-sscp-gram-psd-roundoff.md). |
 
 | `opendp.extras.numpy.array2_domain` | privacy/integer-origin-membership-rounding | Audited | `a010591f55b1713c926f8e355091471634480307` | [Source-equivalent int64 false-positive membership witness](#array2-domain-large-integer-origin-false-positives), [investigation](../../../../../../investigations/numpy-integer-origin-membership-sensitivity.md), and [privacy issue #145](https://github.com/opendp/opendp-audit/issues/145) |
 
@@ -47,6 +50,14 @@ updated: 2026-11-23
 **Pinned source:** `array2_domain` converts an integer `origin` ndarray to `float64`, then `_member` checks `centered = x - origin` and `_rows_within_norm(centered,norm,p)`. For an `int64` `x` around `O=2**60`, the mixed-type subtraction promotes `x` to float64 before subtracting, rounding both `O-64` and `O+128` to `O`. With `norm=1`, `p=1` or `2`, `size=1`, `num_columns=1`, `T=i64`, both arrays are declared members although their actual row-to-origin distances are 64 and 128. A sized `make_np_sum` then emits the original exact int64 sums `O-64` and `O+128`: separation `192` despite a nominal map `2*norm=2` at `d_in=2` (96×). Unlike [#143](https://github.com/opendp/opendp-audit/issues/143), this case has no integer summation overflow.
 
 **Executed:** Source-equivalent NumPy 2.3.5 origin promotion, literal domain membership predicate, scaled helper, sums and map arithmetic; see [standalone regression](../../../../../../tools/tests/test_numpy_integer_origin_membership_model.py) and [full investigation](../../../../../../investigations/numpy-integer-origin-membership-sensitivity.md). **Not executed:** Native OpenDP FFI membership, map evaluation, or noise release. Because of the separate possible int64-metric/float callback type mismatch, this establishes a domain-membership and source-level stability-map violation, **not an observed end-to-end privacy guarantee failure**. [Issue #145](https://github.com/opendp/opendp-audit/issues/145) tracks the new root cause.
+
+### SSCP rank-one Gram matrix numerical false negatives
+
+A **separate** containment error runs opposite to audit #115. For `array2_domain(norm=1,p=2,size=1,num_columns=2,nan=False,T=f64)`, the input `X=[[0.5,0.7]]` has row-L2 norm approximately `0.8602` and is admitted. The current `make_np_sscp` computes `C=X.T@X`. On NumPy 2.3.5 this yields finite, exactly symmetric `C=[[0.25,0.35],[0.35,0.48999999999999994]]`, but its LAPACK-computed eigenvalues include `-5.551115123125783e-17`. The domain's exact `np.any(np.linalg.eigvals(C)<0)` guard rejects **the transformation's own valid-input output**. The same row under f32 has a small negative computed eigenvalue. This disproves `make_np_sscp`'s concrete floating-point **output-domain closure** under this backend without relying on extreme values, NaN, overflow or an invalid public precondition.
+
+**Evidence:** [Independent NumPy regression](../../../../../../tools/tests/test_sscp_gram_psd_rounding_model.py) and [cross-file analysis](../../../../../../investigations/numpy-sscp-gram-psd-roundoff.md). **Executed:** Source-equivalent NumPy f32/f64 Gram product and strict eigenvalue membership; **not executed:** native OpenDP `Domain.member` and full private PCA release. This is a correctness/domain-contract failure, **not** an observed privacy-accounting breach. `idealized-numerics` does not model finite floating-point effects.
+
+**Upstream disposition:** Draft [PR #3281](https://github.com/opendp/opendp/pull/3281), still unmerged on reviewed main `a010591f55b1713c926f8e355091471634480307`, replaces the old domain by a finite symmetric matrix domain that **does not require PSD**. This change directly addresses the false-negative contract for symmetric rounded Gram matrices, in addition to the distinct provenance-bound issue tracked by #115. No duplicate issue was filed.
 
 ## Next checks
 
