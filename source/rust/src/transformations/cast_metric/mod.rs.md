@@ -1,7 +1,7 @@
 ---
 schema_version: 1
 source: rust/src/transformations/cast_metric/mod.rs
-updated: 2026-11-22
+updated: 2026-11-23
 ---
 
 # `rust/src/transformations/cast_metric/mod.rs`
@@ -35,7 +35,7 @@ A model can produce a corresponding downstream privacy-accounting underestimate 
 
 On ordinary release builds with disabled overflow checks, `d_in * 2` uses wrapping integer multiplication, so `map(&2_147_483_648)` yields `Ok(0)`. On overflow-checked builds, the same multiplication panics while evaluating a `Fallible` map instead of returning an error. In either mode, the code does not provide a sound, fallible result across its complete `u32` input space. No explicit Cargo profile enabling release overflow checks was identified in `rust/Cargo.toml`.
 
-**Executed:** A standalone Python reference model checked `u32` modulo arithmetic at both sides of `2^31`, a non-vacuous size-one counterexample for **both** metric pairs, and all binary vector pairs up to length four against the exact `2 * d` metric relation. All model tests passed. **Not executed:** Compiled OpenDP Rust, native debug/release map calls, or FFI executions. See [reproduction tests](../../../../../tools/tests/test_metric_unbounded_cast_overflow.py).
+**Executed:** Four independent [Python reference-model tests](../../../../../tools/tests/test_metric_unbounded_cast_overflow.py), and compiled **actual OpenDP** constructor tests against upstream `ef1a2386` in both debug and release GitHub Actions builds ([workflow run 45102835887](https://github.com/opendp/opendp-audit/actions/runs/45102835887), [test harness](../../../../../tools/integration/metric_unbounded_open_dp.rs)). Both `ChangeOneDistance` and `HammingDistance` conversions were tested on fixed-size one-record domains. Debug `map(&2^31)` panicked in each case; release `map(&2^31)` returned `Ok(0)` in each case, while `map(&1) == Ok(2)`. A CI-only replacement with `StabilityMap::new_from_constant(2)` passed both [repaired-constructor regressions](../../../../../tools/integration/metric_unbounded_repaired_open_dp.rs) in both profiles: unrepresentable bounds yield `Err` without panic. The patch was applied only to the ephemeral CI checkout, **not to upstream OpenDP**. An end-to-end composed privacy-mechanism test and FFI invocation remain outstanding.
 
 ### Reverse cast
 
@@ -45,5 +45,5 @@ On ordinary release builds with disabled overflow checks, `d_in * 2` uses wrappi
 
 - **Finding:** Source-confirmed stability-bound undercount for extreme but representable map inputs in unchecked builds, with a corresponding fallibility/panic defect in checked builds. Impact is **potential privacy-accounting unsoundness** when this map is composed, not a demonstrated end-to-end DP leak. The offending path is reachable with a size-one domain.
 - **Upstream disposition:** **Unreported** at the pinned revision, after checking audit/upstream issues and open pull requests for an equivalent fix. Existing historical [PR #465](https://github.com/opendp/opendp/pull/465) introduced metric casters but does not address the current multiplication. Tracked as [audit candidate #27](https://github.com/opendp/opendp-audit/issues/27); coordination task [#25](https://github.com/opendp/opendp-audit/issues/25).
-- **Decisive regression:** In compiled Rust debug and release builds, call the `ChangeOneDistance` and `HammingDistance` casts on size-one domains, assert `map(&1) == 2`, and ensure `map(&2_147_483_648)` either returns a valid conservative result or returns `Err` without panicking or yielding `Ok(0)`.
-- **Suggested remediation:** Use an explicitly fallible checked/outward multiplication; `StabilityMap::new_from_constant(2)` already applies `InfCast`/`InfMul` and is one candidate if its trait bounds fit. Do not silently saturate or wrap an unrepresentable bound.
+- **Native regression complete:** [CI run 45102835887](https://github.com/opendp/opendp-audit/actions/runs/45102835887) compiled pinned upstream OpenDP and reproduced the checked-build panic and unchecked-build false zero on both metric conversions. All eight original-and-repaired tests across both profiles passed. This is a compiled library reproduction, not a privacy attack.
+- **Remediation verified in CI only:** `StabilityMap::new_from_constant(2)` produced conservative low-distance bounds and returned `Err` rather than wrapping or panicking at `2^31` and `u32::MAX` in both profiles, using the original constructor in an ephemeral patched upstream checkout. Upstream remains unfixed; a production change and review of dependent map callers are still required.
