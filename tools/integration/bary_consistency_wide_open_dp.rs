@@ -102,3 +102,120 @@ fn patched_signed_i128_min_and_single_leaf_remain_finite() -> Fallible<()> {
     assert_eq!(post.eval(&vec![0])?, vec![0.0]);
     Ok(())
 }
+
+#[test]
+fn patched_f64_max_three_node_counts_are_finite() -> Fallible<()> {
+    // Even f64 intermediate summation overflows without normalization:
+    // child_sum = f64::MAX + f64::MAX. Yet each reconciled leaf is 2M/3.
+    for magnitude in [f64::MAX, -f64::MAX] {
+        let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+        let leaves = post.eval(&vec![magnitude; 3])?;
+        let expected = magnitude * (2.0 / 3.0);
+        assert_eq!(leaves.len(), 2);
+        assert!(leaves.iter().all(|v| v.is_finite()), "{leaves:?}");
+        for actual in leaves {
+            assert!(
+                ((actual - expected).abs() / expected.abs()) < 3e-15,
+                "actual={actual}, expected={expected}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn patched_f64_max_seven_node_counts_are_finite() -> Fallible<()> {
+    // Fully symmetric height-3 tree with all seven noisy nodes equal to M.
+    // Independent least-squares projection: 4 leaves each equal to 3M/7.
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    let leaves = post.eval(&vec![f64::MAX; 7])?;
+    let expected = f64::MAX * (3.0 / 7.0);
+    assert_eq!(leaves.len(), 4);
+    for actual in leaves {
+        assert!(actual.is_finite(), "{actual}");
+        assert!(((actual - expected).abs() / expected) < 3e-15);
+    }
+    Ok(())
+}
+
+#[test]
+fn patched_opposite_f64_extreme_leaves_cancel_without_nan() -> Fallible<()> {
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    // These three measurements are already consistent: root=0, children=±M.
+    let leaves = post.eval(&vec![0.0, f64::MAX, -f64::MAX])?;
+    assert_eq!(leaves, vec![f64::MAX, -f64::MAX]);
+    Ok(())
+}
+
+fn four_leaf_least_squares_reference(observed: &[i128; 7]) -> [f64; 4] {
+    // Rows of a complete 2-ary tree: root, two parents, four leaf nodes.
+    const ROWS: [[f64; 4]; 7] = [
+        [1.0, 1.0, 1.0, 1.0],
+        [1.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 1.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+    // Solve AᵀAx=Aᵀy independently with Gauss-Jordan elimination.
+    let mut normal = [[0.0_f64; 4]; 4];
+    let mut rhs = [0.0_f64; 4];
+    for (row, &value) in ROWS.iter().zip(observed.iter()) {
+        for i in 0..4 {
+            rhs[i] += row[i] * (value as f64);
+            for j in 0..4 {
+                normal[i][j] += row[i] * row[j];
+            }
+        }
+    }
+    for pivot in 0..4 {
+        let selected = (pivot..4)
+            .max_by(|&a, &b| normal[a][pivot].abs().total_cmp(&normal[b][pivot].abs()))
+            .unwrap();
+        normal.swap(pivot, selected);
+        rhs.swap(pivot, selected);
+        let diagonal = normal[pivot][pivot];
+        assert!(diagonal.abs() > 0.01);
+        for j in pivot..4 {
+            normal[pivot][j] /= diagonal;
+        }
+        rhs[pivot] /= diagonal;
+        for i in 0..4 {
+            if i == pivot { continue; }
+            let weight = normal[i][pivot];
+            for j in pivot..4 {
+                normal[i][j] -= weight * normal[pivot][j];
+            }
+            rhs[i] -= weight * rhs[pivot];
+        }
+    }
+    rhs
+}
+
+#[test]
+fn patched_200_complete_tree_inputs_match_independent_least_squares() -> Fallible<()> {
+    let post = make_consistent_b_ary_tree::<i128, f64>(2)?;
+    let mut state = 0x1234_5678_9abc_def0_u64;
+    for trial in 0..200 {
+        let mut observed = [0_i128; 7];
+        for value in &mut observed {
+            // Fixed-seed xorshift: reproducible diverse signed counts.
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            *value = (state % 601) as i128 - 300;
+        }
+        let expected = four_leaf_least_squares_reference(&observed);
+        let actual = post.eval(&observed.to_vec())?;
+        assert_eq!(actual.len(), 4);
+        for i in 0..4 {
+            assert!(
+                (actual[i] - expected[i]).abs() < 1.0e-9,
+                "trial={trial}, leaf={i}, actual={}, oracle={}",
+                actual[i], expected[i]
+            );
+        }
+    }
+    Ok(())
+}

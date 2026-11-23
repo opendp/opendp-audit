@@ -1,4 +1,4 @@
-"""Experimentally widen b-ary consistency input and intermediate arithmetic to f64.
+"""Experimentally normalize large b-ary values in f64 to avoid intermediate overflow.
 
 Applies only to a checkout of the pinned upstream OpenDP revision in CI.
 Never commits changes to opendp/opendp. Every substitution is fail-closed.
@@ -50,6 +50,29 @@ def main():
             .chain((0..zero_leaves).map(|_| Ok(0.0_f64)))
             .collect::<Fallible<_>>()?;""",
     )
+    # Avoid overflowing *f64* intermediate sums as well. Keep normal-scale
+    # inputs untouched; rescale only if even a conservative number-of-nodes
+    # sum bound could cross the largest finite binary64 value.
+    source = replace_exact(
+        source,
+        ".collect::<Fallible<_>>()?;\n\n        // zero out all zero variance zero nodes on the tree",
+        """.collect::<Fallible<_>>()?;
+
+        if !tree.iter().all(|v| v.is_finite()) {
+            return fallible!(FailedFunction, "input atom is nonfinite");
+        }
+        let max_abs = tree.iter().copied().map(f64::abs).fold(0.0_f64, f64::max);
+        let scale = if max_abs > f64::MAX / (4.0 * num_nodes as f64) {
+            max_abs
+        } else {
+            1.0_f64
+        };
+        if scale != 1.0 {
+            tree.iter_mut().for_each(|v| *v /= scale);
+        }
+
+        // zero out all zero variance zero nodes on the tree""",
+    )
     source = replace_exact(
         source, ".fill(TOA::zero());", ".fill(0.0_f64);", expected=2
     )
@@ -92,7 +115,7 @@ def main():
                 if !v.is_finite() {
                     return fallible!(FailedFunction, "nonfinite reconciled leaf");
                 }
-                let out = TOA::round_cast(v)?;
+                let out = TOA::round_cast(v * scale)?;
                 if !out.is_finite() {
                     return fallible!(FailedFunction, "reconciled leaf overflows output type");
                 }
@@ -103,7 +126,7 @@ def main():
     if source == original:
         raise RuntimeError("Patch made no changes")
     path.write_text(source)
-    print("Applied experimental direct-input f64 fix to local CI checkout")
+    print("Applied experimental normalized-f64 fix to local CI checkout")
 
 
 if __name__ == "__main__":
