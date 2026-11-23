@@ -1,0 +1,27 @@
+name: Probe NumPy int64 sum in a native OpenDP wheel
+
+on:
+  push:
+    paths:
+      - '.github/workflows/numpy-int64-sum-native.yml'
+      - 'tools/integration/numpy_int64_sum_native.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-opendp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install version-pinned native OpenDP and NumPy
+        run: |
+          python -m pip install 'opendp==0.16.0a20261122001' 'numpy==2.3.5'
+      - name: Execute native NumPy int64 sum, membership and privacy-map diagnostics
+        run: |
+          python -u tools/integration/numpy_int64_sum_native.py
