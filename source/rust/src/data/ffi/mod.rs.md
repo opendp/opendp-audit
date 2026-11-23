@@ -14,6 +14,8 @@ updated: 2026-11-22
 - **Assumptions:** The caller supplies a valid `FfiSlice` of contiguous `AnyObject` values; pointer validity and element-type correctness are outside scope.
 - **Source:** [Rust FFI converter at reviewed commit](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/data/ffi/mod.rs), [FfiSlice layout](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/core/ffi/mod.rs).
 
+- **Additional audit scope:** The pointer representation of a scalar `String` returned by `opendp_data__object_as_slice::string_to_raw`, compared with R and Python readers. Its separate allocation leak is not the property assessed here.
+
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
@@ -22,6 +24,8 @@ updated: 2026-11-22
 | `opendp_data__slice_free` | memory/temporary-slice-ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Cleanup contract](../../../../../investigations/ffi-vector-slice-lifetime.md) |
 | `opendp_data__object_as_slice` | memory/ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Descriptor analysis](#opendp_data__object_as_slice-and-opendp_data__slice_free--memoryownership): successful result transfers an owned descriptor to the caller |
 | `opendp_data__slice_free` | memory/ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Descriptor analysis](#opendp_data__object_as_slice-and-opendp_data__slice_free--memoryownership): frees the outer descriptor only |
+
+| `opendp_data__object_as_slice::string_to_raw` | correctness/ffi-scalar-string-layout | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Scalar String layout](#scalar-string-pointer-layout): returns a direct `char *` where both binding readers expect `char **` |
 
 ## Analysis
 
@@ -46,7 +50,19 @@ updated: 2026-11-22
 
 **Related:** [Cross-language ownership investigation](../../../../../investigations/r-ffi-slice-descriptor-ownership.md), [upstream PR #3176](https://github.com/opendp/opendp/pull/3176).
 
+### Scalar String pointer layout — `correctness/ffi-scalar-string-layout`
+
+**Conclusion:** The scalar `String` branch of `object_as_slice` publishes an `FfiSlice.ptr` that is a C-string byte pointer (`char *`), not the address of a C-string pointer (`char **`). Both bindings read this as a pointer array and can dereference a nonsensical address. This is a distinct issue from the leaked C-string allocation documented in the Rust `FIXME` and from outer `FfiSlice` ownership.
+
+**Evidence:** `string_to_raw` passes `util::into_c_char_p(string.clone())` directly to `FfiSlice::new`. In contrast, `vec_string_to_raw` passes `vec.as_ptr()`, where `vec` is a `Vec<*mut c_char>`. The latter has the expected `char **` layout. The R scalar path uses `((char **)input)[i]` and Python's `_slice_to_string` casts to `POINTER(c_char_p)` and reads `.contents.value`. For a valid one-byte string `"A"`, interpreting the first bytes of the string as a machine pointer yields an invalid pointer value rather than the address of the string.
+
+**Limitations:** No compiled OpenDP runtime or sanitizers were run. The static type/representation mismatch is direct; platform-specific failure mode (crash, invalid memory access, or other undefined behavior) was not measured. Only scalar `String` output was assessed; the `Vec<String>` pointer-array shape matches the readers and is not asserted defective on this property.
+
+**Related:** [Cross-language investigation](../../../../../investigations/ffi-scalar-string-layout.md). [Upstream draft PR #3179](https://github.com/opendp/opendp/pull/3179) constructs the scalar string pointer array under `FfiSliceOwner`, but is open and unmerged at review time.
+
 ## Next checks
 
 - Check the eventual merged code and native regression tests for complete release of pointer-array storage under both success and error conditions.
 - Independently audit the backing-buffer lifetime of the `object_as_slice` descriptor, and verify cleanup through the R consumer after PR #3176 merges.
+
+- Follow the [Cross-language scalar string layout investigation](../../../../../investigations/ffi-scalar-string-layout.md) and run scalar `String` outputs through a compiled, sanitizer-enabled binding before marking this pointer-layout concern resolved.

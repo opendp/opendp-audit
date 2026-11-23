@@ -13,11 +13,16 @@ updated: 2026-11-22
 - **Assumptions:** Upstream `main` at the commit below; `opendp_data__object_as_slice` uses its Rust `FfiResult<*mut FfiSlice>` return contract. This report distinguishes descriptor ownership from pointed-to buffer ownership.
 - **Source links:** [R conversion function](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/R/opendp/src/convert.c#L792-L846), [Rust result allocation contract](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/core/ffi/mod.rs#L100-L125), [Rust slice destructor](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/data/ffi/mod.rs#L936-L950).
 
+- **Additional audit scope:** Scalar Rust `String` output, tracing `anyobjectptr_to_sexp` through `slice_to_sexp`, `slice_to_scalar`, and `voidptr_to_sexp`, focusing on the C pointer representation consumed by `mkChar`.
+
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
 | `anyobjectptr_to_sexp` | memory/ownership | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Analysis](#analysis): returned `FfiSlice` descriptor is not freed on the successful non-opaque path; cleanup is proposed in upstream PR #3176 |
+
+| `voidptr_to_sexp` | correctness/ffi-scalar-string-layout | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Scalar String layout](#scalar-string-pointer-layout): treats `FfiSlice.ptr` as `char **` even when Rust supplies `char *` |
+| `slice_to_scalar` | correctness/ffi-scalar-string-layout | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Scalar String layout](#scalar-string-pointer-layout): forwards the unadjusted pointer for `String` values |
 
 ## Analysis
 
@@ -35,7 +40,21 @@ updated: 2026-11-22
 
 **Related:** [Cross-language ownership investigation](../../../../investigations/r-ffi-slice-descriptor-ownership.md), [upstream PR #3176](https://github.com/opendp/opendp/pull/3176). No issue was opened.
 
+### Scalar String pointer layout — `correctness/ffi-scalar-string-layout`
+
+**Conclusion:** The R output converter's scalar `String` branch expects the address of a C-string pointer, whereas the Rust scalar producer supplies the address of the string bytes themselves. Passing a scalar `String` through `anyobjectptr_to_sexp` can cause an invalid read or crash. This is independent of the FFI descriptor leak noted above.
+
+**Evidence:** `slice_to_sexp` routes atomic `String` through `slice_to_scalar` into `voidptr_to_sexp(raw->ptr, type_name, raw->len)`; `voidptr_to_sexp` calls `mkChar(((char **)input)[i])`. The Rust producer `string_to_raw` sets `raw->ptr` to a direct `char *`. The existing [scalar string identity test](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/R/opendp/tests/testthat/test-data.R) expresses an intended user-facing roundtrip, but its success was not checked in this audit.
+
+**Negative finding:** For `Vec<String>`, Rust returns a pointer to an array of `char *` elements, matching this R decoder's expected shape; this finding is specific to scalar `String` output.
+
+**Limitations:** Source inspection and a standalone pointer-layout illustration only; no R package installation, R test execution, or sanitizer run. [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) changes the Rust producer to return an owned `char **` view, not yet merged on upstream `main`.
+
+**Related:** [Cross-language investigation](../../../../investigations/ffi-scalar-string-layout.md).
+
 ## Next checks
 
 - After PR #3176 merges, inspect the merged SHA and test normal returns and nonlocal R error exits under a native leak checker.
 - Separately audit backing-buffer ownership (particularly `Vec<String>`, tuples, and `Vec<AnyObject>`) rather than assuming `slice_free` releases all allocations.
+
+- Follow the [Cross-language scalar string layout investigation](../../../../investigations/ffi-scalar-string-layout.md) and run scalar `String` outputs through a compiled, sanitizer-enabled binding before marking this pointer-layout concern resolved.
