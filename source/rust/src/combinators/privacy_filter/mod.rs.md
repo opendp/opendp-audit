@@ -17,12 +17,11 @@ updated: 2026-11-23
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
 | --- | --- | --- | --- | --- |
-| `combinators::privacy_filter::new_continuation_rule` | privacy/over-budget-answer-withholding | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Transition analysis](#transition-analysis) and [investigation](../../../../../investigations/privacy-filter-failure-accounting.md) |
+| `combinators::privacy_filter::new_continuation_rule` | privacy/over-budget-answer-withholding | Audited | `a010591f55b1713c926f8e355091471634480307` | [Transition analysis](#transition-analysis), [investigation](../../../../../investigations/privacy-filter-failure-accounting.md), and [fully adaptive audit](../../../../../source/rust/src/combinators/sequential_composition/fully_adaptive/mod.rs.md) |
 | `combinators::privacy_filter::new_continuation_rule` | correctness/terminal-exhaustion | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Transition analysis](#transition-analysis) |
 | `combinators::privacy_filter::make_privacy_filter` | privacy/map-bound | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Map analysis](#map-analysis); relies on a valid odometer contract |
 | `combinators::privacy_filter::new_continuation_rule` | privacy/failed-postprocessing-accounting | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Cross-file investigation](../../../../../investigations/privacy-filter-failure-accounting.md), dependent on odometer bookkeeping |
 | `combinators::privacy_filter::make_privacy_filter` | privacy/nonnegative-budget-precondition | Audited | `a010591f55b1713c926f8e355091471634480307` | [Budget construction validation](#budget-construction-validation) and merged [upstream PR #3287](https://github.com/opendp/opendp/pull/3287) |
-| `combinators::privacy_filter::new_continuation_rule` | privacy/over-budget-answer-withholding | Audited | `a010591f55b1713c926f8e355091471634480307` | [Transition analysis](#transition-analysis) and [fully adaptive audit](../../../../../source/rust/src/combinators/sequential_composition/fully_adaptive/mod.rs.md) |
 
 ## Analysis
 
