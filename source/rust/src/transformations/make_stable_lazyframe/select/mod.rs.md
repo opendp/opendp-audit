@@ -21,6 +21,8 @@ updated: 2026-11-23
 | `make_select` | privacy/row-local-projection-stability | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Stability reasoning](#stability-reasoning), [independent model](../../../../../../tools/tests/test_polars_select_projection_model.py) |
 | `make_select` | correctness/projection-shape-options | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Guards and schemas](#guards-and-schemas) |
 | `make_select` | privacy/grouping-lineage-and-bounds | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Contribution bounds](#contribution-bounds) |
+| `make_select` | correctness/identifier-preservation | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Identifier-preserving projections](#identifier-preserving-projections), [candidate #64](https://github.com/opendp/opendp-audit/issues/64) |
+| `make_select` | correctness/output-metric-space | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Identifier-preserving projections](#identifier-preserving-projections) |
 
 ## Analysis
 
@@ -41,6 +43,14 @@ The constructor computes `retained_columns` from expressions syntactically ident
 The [independent test](../../../../../../tools/tests/test_polars_select_projection_model.py) enumerated **7,232** projection/certificate scenarios using three input columns, direct identities, overwrites, renamed columns, derived columns, constants, grouping certificates, and selectors. In the model, every retained explicit-root certificate refers only to unchanged columns; selectors are retained only if no changes occur. Existing native tests explicitly check plain, casted and selector-derived grouping keys, but were inspected rather than executed in this audit.
 
 **Result:** No certificate-retention counterexample in the finite model and source-level lineage trace. Native Polars schema, selector expansion, and identifier-metric semantics remain **Partial**.
+
+### Identifier-preserving projections
+
+**New, distinct constructor-correctness finding:** For `FrameDistance<SymmetricIdDistance>` with `identifier: col("ID")`, the FFI supports `MI == MO` and the `DataFrameScan` source transformation retains the metric. The row-wise expression `col("ID")` is an identity. Nevertheless, the `make_select` guard compares identifier roots against **every projected output name** and therefore rejects `select([col("ID"), col("x")])` with `"identifiers (...) may not be modified"`. The later `is_identity` / `changed_columns` analysis is not used by this guard. An unchanged identifier should not count as a modification.
+
+Conversely, projecting only `col("x")` or renaming `ID` to another name avoids that guard but then fails the output `FrameDomain` metric-space check: the retained `SymmetricIdDistance` still references an `ID` column that is absent. Thus an ordinary same-metric `select` cannot pass both checks for a direct identifier: **keeping `ID` fails the identifier-name guard; dropping it fails metric-space validation**. An identity projection is 1-stable and should be constructible. The comparison against all output names is appropriate for overwriting in `make_h_stack`, but not for carrying unchanged columns through a `select`.
+
+Five executed dependency-free Python model tests reproduced the set-intersection/output-schema branches, checked unchanged, removed, renamed, and overwritten identifiers, enumerated six direct two-output mappings, and confirmed a non-vacuous symmetric-identifier-distance-two pair remains at distance two under identity projection. **Compiled OpenDP Rust/Polars and FFI were not executed.** This is a source-confirmed usability/correctness defect, not a demonstrated privacy-map underestimate. See the [cross-file investigation](../../../../../../investigations/polars-select-identifier-projection.md), [reference tests](../../../../../../tools/tests/test_polars_select_identifier_model.py), and [audit issue #64](https://github.com/opendp/opendp-audit/issues/64). Upstream disposition **Unreported**; native reproduction remains outstanding.
 
 ## Next checks
 
