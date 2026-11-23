@@ -36,20 +36,26 @@ The OpenDP formula is `nullable = input_nullable || new_has_null`; if `old_has_n
 
 OpenDP requires the mapping expressions to be public literals and checks only their length and datatype compatibility, not uniqueness. The literal mapping `old=[1,1]`, `new=[10,20]` with `Int32` input has matching lengths and dtypes and passes the visible constructor predicates. Pinned Polars' `replace` explodes the old list, calls `validate_old(&old)?`, and requires `old.n_unique()? == old.len()`. Since there is one unique key in two positions, execution returns an `InvalidOperation` error. The `Expr::replace` API creates an AST node without this check; the Polars planner's type-coercion handling wraps non-list arguments with `Implode` but does not enforce uniqueness.
 
-**Finding:** [Audit candidate #56](https://github.com/opendp/opendp-audit/issues/56) tracks this low-severity, deferred public-input validation problem. Verification is **Candidate**, not Reproduced: the source path is deterministic, but no compiled native test was executed. Unlike nullability soundness errors, this is not evidence of private-data-dependent output/error behavior.
+**Finding:** [Audit candidate #56](https://github.com/opendp/opendp-audit/issues/56) tracks this low-severity deferred public-input validation problem. Its **Polars executor portion is Reproduced** in the compiled 1.36.1 Python wheel; the full OpenDP constructor-to-release path remains **Candidate**, pending the native Rust integration test. Unlike nullability soundness errors, this is not evidence of private-data-dependent output/error behavior.
+
+### Compiled Polars runtime reproduction
+
+The [pinned-runtime integration script](https://github.com/opendp/opendp-audit/blob/0c8a70b192a444f1cb32d53bbbcecbd6c80a7c6e/tools/integration/polars_replace_runtime.py) ran against the **compiled Polars 1.36.1 wheel** and [passed all four tests in CI](https://github.com/opendp/opendp-audit/actions/runs/45104162426). Both a dataset with matching keys `[1,2]` and a dataset with no matching keys `[7,8]` raised `InvalidOperationError` at `collect()` for the same duplicate public keys `old=[1,1]`. The distinct-key control returned `[10,20]`, and `old=[NULL,1], new=[0,10]` imputed `[NULL,1,2]` to `[0,10,2]`. The runtime version assertion was `1.36.1`.
+
+The companion [pinned OpenDP Rust integration test](https://github.com/opendp/opendp-audit/blob/0c8a70b192a444f1cb32d53bbbcecbd6c80a7c6e/tools/integration/polars_replace_open_dp.rs) is separate and must run successfully before the overall OpenDP constructor-to-collection claim can be upgraded to Reproduced.
 
 ### Evidence limitations
 
-The pinned source and existing tests were read using the GitHub connector. The finite-alphabet JavaScript model was executed independently; the three duplicate-key examples `[1,1]`, `[NULL,NULL]`, and `[1,NULL,1]` were also checked for nonuniqueness in the model. No OpenDP Rust or Polars runtime was invoked. Existing unit tests exercise valid mapping/null imputation and mismatched dtypes but omit duplicate public patterns.
+The pinned source and existing tests were read using the GitHub connector. The finite-alphabet JavaScript model was executed independently; the three duplicate-key examples `[1,1]`, `[NULL,NULL]`, and `[1,NULL,1]` were also checked for nonuniqueness in the model. Compiled Polars was invoked in the dedicated CI integration job. Native OpenDP Rust compilation and constructor execution remain outstanding. Existing unit tests exercise valid mapping/null imputation and mismatched dtypes but omit duplicate public patterns.
 
 ## Findings
 
 - **No nullability underapproximation** in the 56,931 modeled row/domain combinations; completeness remains Partial due to untested compiled backend and casting.
-- **Distinct candidate correctness defect:** invalid duplicate public old keys pass OpenDP's static constructor but fail deterministically when Polars evaluates the expression; [issue #56](https://github.com/opendp/opendp-audit/issues/56).
+- **Candidate correctness defect with reproduced Polars executor:** static OpenDP constructor checks admit duplicate old keys and the native Polars 1.36.1 executor rejects them regardless of input values; [issue #56](https://github.com/opendp/opendp-audit/issues/56). The combined OpenDP path remains unverified.
 - **No new privacy leak established** within the limited review.
 
 ## Unresolved questions
 
-- Reproduce #56 with native OpenDP and Polars `py-1.36.1`, then add public-literal uniqueness validation and a regression.
+- Run the pinned native OpenDP constructor-to-collection integration for #56; if it corroborates the source path, add public-literal uniqueness validation upstream and a regression.
 - Check NULL/NaN key equality and string, float, integer cast behavior under optimized execution.
 - Explore aggregation `fill` mapping and optimizer-specific behavior not included in the rowwise model.
