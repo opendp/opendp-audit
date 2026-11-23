@@ -19,6 +19,7 @@ updated: 2026-11-23
 | --- | --- | --- | --- | --- |
 | `make_expr_boolean_function` | correctness/nullability | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Nullability branch trace](#nullability-branch-trace) and [cross-file investigation](../../../../../../investigations/polars-rowwise-leaf-alias-boolean.md) |
 | `make_expr_boolean_function` | correctness/dtype-and-bitwise-not | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Type and descriptor handling](#type-and-descriptor-handling) |
+| `make_expr_boolean_function` | correctness/not-dtype-precondition | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Public Float64 Not is accepted by OpenDP but rejected by pinned Polars](#not-dtype-precondition-mismatch); [candidate #103](https://github.com/opendp/opendp-audit/issues/103) |
 | `make_expr_boolean_function` | privacy/rowwise-stability | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Aggregation exclusions and stability](#aggregation-exclusions-and-stability) |
 
 ## Analysis
@@ -31,10 +32,18 @@ The operator is restricted to the seven reviewed variants. When `IsNull` or `IsN
 
 For probes, `set_dtype(DataType::Boolean)` resets the element-domain descriptor to an unrestricted Boolean domain. For `Not`, it uses the input dtype but still calls `set_dtype`, which replaces the prior element domain and discards bounds and NaN descriptors. This is conservative for bitwise negation of signed integers (e.g. `!0 = -1`) and preserves the declared null mask. The pinned native tests exercise Boolean and signed 64-bit `Not`, including null propagation. Other combinations (e.g. unsupported dtype/operator pairs) were not executed; `Partial` status avoids claiming exhaustive runtime validity.
 
+### Not dtype precondition mismatch
+
+**Distinct, low-severity finding:** The allowlist includes `Not`, but the constructor checks neither the input's public dtype nor Polars output-schema inference before returning a `Transformation`. A `SeriesDomain::new("x", AtomDomain::<f64>::default())` and `col("x").not()` therefore pass the local BooleanFunction construction checks; the `select` traversal likewise builds expression transformations without a `to_field` check. The returned `ExprDomain` retains `Float64` and the identity stability map.
+
+At [pinned Polars commit `2a151c10fa76790711c2f75e6d012dd69c627ddd`](https://github.com/pola-rs/polars/tree/2a151c10fa76790711c2f75e6d012dd69c627ddd), [`IRBooleanFunction::Not::get_field`](https://github.com/pola-rs/polars/blob/2a151c10fa76790711c2f75e6d012dd69c627ddd/crates/polars-plan/src/plans/aexpr/function_expr/boolean.rs) accepts only Boolean and integer datatypes, and [`negate_bitwise`](https://github.com/pola-rs/polars/blob/2a151c10fa76790711c2f75e6d012dd69c627ddd/crates/polars-ops/src/series/ops/not.rs) imposes the same restriction. Float32, Float64, and String are rejected with an `InvalidOperation` error. [Pinned-Polars integration script](https://github.com/opendp/opendp-audit/blob/main/tools/integration/polars_boolean_not_dtype.py) **ran successfully** in [CI #45111889610](https://github.com/opendp/opendp-audit/actions/runs/45111889610): three unsupported dtypes failed as expected; nullable Int64 and Boolean succeeded with the expected row results. The scripted execution is **Polars only**; compiled OpenDP construction/execution has not been tested.
+
+Because the failure is determined by *public dtype*, this is a constructor/availability mismatch, **not a demonstrated privacy violation**. Existing tests cover supported Boolean and signed-integer `Not`, but not unsupported dtype admission. Track in [candidate defect #103](https://github.com/opendp/opendp-audit/issues/103); no matching upstream issue or corrective PR was found.
+
 ### Aggregation exclusions and stability
 
 `Any` and `All` are rejected during construction as aggregation operators, as are unrecognized BooleanFunction variants. For supported operators the prior stable expression is composed with a row-wise `Function::then_expr` and identity stability map. This is sound for ordinary non-expanding row-wise predicates under event-level metrics, assuming the Polars predicate itself neither changes row alignment nor raises data-dependent errors. No runtime tests, invalid-dtype error checks or optimizer-proof work were performed; this is a **Partial** stability conclusion, not a proof of every combination.
 
 ## Next checks
 
-Exercise compiled Rust/Polars against a dtype/operator compatibility matrix, especially `Not` for unsigned integers and invalid pairs, and compare materialized output to `ExprDomain::member`. No new verified bug within the supported, source-reviewed branches.
+Exercise compiled Rust/Polars against a dtype/operator compatibility matrix, especially `Not` for unsigned integers and invalid pairs, and compare materialized output to `ExprDomain::member`. The new dtype-precondition mismatch is documented in [issue #103](https://github.com/opendp/opendp-audit/issues/103); its end-to-end OpenDP reproduction is still outstanding.
