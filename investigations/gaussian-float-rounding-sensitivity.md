@@ -51,6 +51,14 @@ The first exploratory reference test used Python `int` truncation for negative v
 
 The implementation and upstream Rust tests implement ties toward **positive infinity**. The `get_rounding_distance` source comment and its proof state “ties rounding down.” This is a documentation inconsistency that should be corrected. The conservative bound covers both tie choices, so it is not evidence of a privacy undercount.
 
+### Directed integer-to-float and square-root dependencies (2026-11-22)
+
+Source audits: [`InfCast<usize> for f64`](../source/rust/src/traits/cast/mod.rs.md) and [`InfSqrt for f64`](../source/rust/src/traits/arithmetic/mod.rs.md). The former dispatches through `FBig<Up>::from(IBig::from(size))`, not nearest-native integer casting. The latter computes `sqrt` under `FBig<Up>` and casts outward to `f64`, which should preserve a conservative upper bound. The float Gaussian utility combines them via `f64::inf_cast(size)?.inf_sqrt()?`, then converts the returned binary64 exactly into `RBig`.
+
+The new [independent 64-bit reference model](../tools/tests/test_directed_gaussian_rounding_model.py) ran **9,484** adversarial and seeded integer sizes and tested whether an upward binary64 cast and upward sqrt remained above the exact real `sqrt(size)`. This included `2^53+1`, `2^63-1`, `2^64-1`, power-of-two boundaries and square boundaries. All passed exact `fractions.Fraction` inequalities. **This does not execute or independently verify dashu `FBig<Up>`; the dependency's real Rust implementation remains Partial.**
+
+The previously reported tie-direction documentation mismatch is tracked by [audit issue #21](https://github.com/opendp/opendp-audit/issues/21). It does not affect the privacy bound.
+
 ## Findings
 
 No violation of the L2 rounding-sensitivity inequality was found within the audited source-level assumptions and executed small-grid cases. A non-security documentation discrepancy exists for tie direction and is tracked in [audit issue #21](https://github.com/opendp/opendp-audit/issues/21). The full Gaussian cross-file privacy property remains **Partial** because the directed arithmetic, sampler and float conversion behavior were not natively executed or independently proved here. **Upstream disposition: unreported; no matching corrective PR found.**
