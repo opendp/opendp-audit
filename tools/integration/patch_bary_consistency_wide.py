@@ -158,7 +158,7 @@ def main():
                         let child_sum: num::BigRational =
                             exact_tree[children.clone()].iter().cloned().sum();
                         let correction = &exact_out[i] - child_sum;
-                        if correction.is_zero() { continue; }
+                        if correction == num::BigRational::zero() { continue; }
                         let total_var: num::BigRational =
                             exact_vars[children.clone()].iter().cloned().sum();
                         if total_var.is_zero() {
