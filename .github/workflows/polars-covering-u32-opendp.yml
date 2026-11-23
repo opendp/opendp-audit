@@ -1,0 +1,52 @@
+name: Verify Polars covering u32 comparator in pinned OpenDP
+
+on:
+  push:
+    paths:
+      - '.github/workflows/polars-covering-u32-opendp.yml'
+      - 'tools/integration/polars_covering_u32_open_dp.rs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [debug, release]
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_BUILD_JOBS: '2'
+      RUSTFLAGS: '-C debuginfo=0'
+    steps:
+      - name: Checkout audit regression
+        uses: actions/checkout@v4
+      - name: Checkout pinned upstream OpenDP
+        uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
+          path: opendp-upstream
+          persist-credentials: false
+      - name: Check pinned SHA and install isolated test
+        run: |
+          set -euo pipefail
+          test "$(git -C opendp-upstream rev-parse HEAD)" = 'ef1a238634d6196b01a1a1e77d3d5ad2340e3094'
+          mkdir -p opendp-upstream/rust/tests
+          cp tools/integration/polars_covering_u32_open_dp.rs opendp-upstream/rust/tests/
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify original comparator behavior in ${{ matrix.profile }}
+        shell: bash
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [ "$PROFILE" = 'release' ]; then flags+=(--release); fi
+          cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
+            --no-default-features --features contrib,polars "${flags[@]}" \
+            --test polars_covering_u32_open_dp -- --nocapture
