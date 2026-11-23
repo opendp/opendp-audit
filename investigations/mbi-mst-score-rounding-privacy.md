@@ -50,11 +50,25 @@ This is a counterexample to privacy accounting for the *internal scorer-to-selec
 
 Actual OpenDP `TypedDictDomain.member` checks passed on both neighbors. Invoking the native `_make_mst_scores` gave `[-8,0,0]`, while `t_scores.map(d_in)` returned 1. Composing with `then_noisy_max(scale=4)` reported `epsilon=0.5`. Crucially, the actual `_make_mst_select` constructor with `num_selections=1` and `d_out=0.5` also constructed, `map(d_in)` returned `0.5`, and it successfully sampled an edge. The finite-model, actual-selector evidence confirms the **internal privacy-map counterexample**.
 
-**Not executed:** A complete `make_contingency_table` call or its model re-estimation pipeline. That outer workflow might constrain public model totals. Thus the verified impact is an internal score/selection measurement that incorrectly certifies privacy; the deployed high-level release path remains an unresolved reachability question.
+**Algorithm method now executed:** A later CI run constructed and invoked `MST.make_marginals` with the same model and observed the selected clique in the returned `Marginals`. **Not executed:** the outer `make_contingency_table` wrapper or its model re-estimation pipeline; that wrapper might constrain public model totals.
+
+## Public MST algorithm release and observable DP violation
+
+[Successful native public-algorithm release CI](https://github.com/opendp/opendp-audit/actions/runs/45255535102) exercised `MST.make_marginals`, not only the internal `_make_mst_select`. It used a publicly fixed, self-consistent MBI `MarkovRandomField` with log-potential `0` at `000`, `-1000` elsewhere, `total=float(2**55+16)`, and no stored marginals. The model's public projections were inferred from these potentials by MBI's own algorithm.
+
+The measurement input has three `UInt32` columns `A,B,C` bounded to `[0,1]` and `FrameDistance<SymmetricDistance>` with public `d_in=[Bound(per_group=1)]`. The two native Polars `LazyFrame` inputs are four `000` rows, and those same rows plus `010`. The underlying schema and all row values meet these public domain constraints (native `FrameDomain.member` is intentionally unsupported under `polars-ffi`).
+
+The public `MST` algorithm is configured with `measure_split=0.5`, `num_selections=1`, `d_out=1`; it uses a deterministic, private-data-independent estimator which returns the same public model. This requires—and legitimately enables—the `honest-but-curious` feature. The measured `m.map(d_in)=0.9999999999999999`; real `m(frame)` invocation **completed successfully for both neighbors**. Each returned `Marginals.cliques()` contains precisely the selected edge, so that private-selection event is observable to the recipient of the release, independent of subsequent marginal noise.
+
+At the first and only private edge selection, the actual score vectors are tied versus `[-8,0,0]` relatively. The library's `_make_mst_select` uses pure-DP permute-and-flip with a scale calibrated to selection epsilon `0.5` (approximately `s=4`); an initially tied candidate edge `AB` has selection probability `1/3` for the four-row data and `exp(-8/s)/3` after the additional row. Its event log likelihood ratio is thus `8/s≈2`, exceeding **the whole public measurement's claimed epsilon 1**. This event remains directly readable from `Marginals.cliques()` after complete measurement invocation. This gives a **successful public algorithm API release-path counterexample to the advertised privacy guarantee**, with event probabilities obtained from source, not merely observed random draws.
+
+**Scope limit:** This test does not invoke the outer `Context.contingency_table` workflow, whose model fitting from prior releases may impose additional constraints. The supported direct `MST.make_marginals` algorithm measurement is the exposed public API in the verified test.
+
+[Regression](../tools/integration/mbi_large_model_algorithm_release_native.py) · [CI run](https://github.com/opendp/opendp-audit/actions/runs/45255535102) · [issue #135](https://github.com/opendp/opendp-audit/issues/135).
 
 ## Deduplication and mitigation
 
 - [Issue #117](https://github.com/opendp/opendp-audit/issues/117) observes that `np.linalg.norm(matrix, 1)` means induced matrix 1-norm rather than entrywise L1. In *exact arithmetic*, that distinction makes the L1 stability bound conservative. The new rounding issue is different and persists even if that utility issue is fixed with a floating-point flattened norm.
 - [Issue #125](https://github.com/opendp/opendp-audit/issues/125) records an analogous score-rounding failure in **AIM**, not this MST selection route.
 
-Recommended follow-up: validate high-level `make_contingency_table` model reachability and redesign the score computation or its certified stability map to bound numerical arithmetic, including cancellation and reductions. Never rely on the exact-arithmetic Lipschitz constant without a floating-point error analysis.
+Recommended follow-up: validate `Context.contingency_table` wrapper model reachability and redesign the score computation or its certified stability map to bound numerical arithmetic, including cancellation and reductions. Never rely on the exact-arithmetic Lipschitz constant without a floating-point error analysis.
