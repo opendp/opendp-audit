@@ -53,7 +53,7 @@ The implementation and upstream Rust tests implement ties toward **positive infi
 
 ## Findings
 
-No violation of the L2 rounding-sensitivity inequality was found within the audited source-level assumptions and executed small-grid cases. A non-security documentation discrepancy exists for tie direction. The full Gaussian cross-file privacy property remains **Partial** because the directed arithmetic, sampler and float conversion behavior were not natively executed or independently proved here. No new issue or PR was created.
+No violation of the L2 rounding-sensitivity inequality was found within the audited source-level assumptions and executed small-grid cases. A non-security documentation discrepancy exists for tie direction and is tracked in [audit issue #21](https://github.com/opendp/opendp-audit/issues/21). The full Gaussian cross-file privacy property remains **Partial** because the directed arithmetic, sampler and float conversion behavior were not natively executed or independently proved here. **Upstream disposition: unreported; no matching corrective PR found.**
 
 ## Unresolved questions
 

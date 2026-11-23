@@ -40,11 +40,11 @@ R's generic `slice_to_sexp` has no `Function` case. Public reachability of a gen
 
 [Draft PR #3179](https://github.com/opendp/opendp/pull/3179) (reviewed at `bccc2aeb6e38ac5b2ad7894eae8fa441080d8119`) places optional tuple pointer arrays under a typed `FfiSliceOwner` and provides direct `opendp_data__clone_function` output for Python. The PR remains unmerged. Its [R tuple decoder](https://github.com/opendp/opendp/blob/bccc2aeb6e38ac5b2ad7894eae8fa441080d8119/R/opendp/src/convert.c) still delegates each member to `voidptr_to_sexp` without `AnyObject` support.
 
-**Executed:** Pinned Rust/R/Python source review, draft PR comparison, and one standalone opaque-pointer `ctypes` address check. **Not executed:** compiled OpenDP binding tests, native leak checking, sanitizer runs, or destructor-count instrumentation. No issue or PR was created.
+**Executed:** Pinned Rust/R/Python source review, draft PR comparison, and one standalone opaque-pointer `ctypes` address check. **Not executed:** compiled OpenDP binding tests, native leak checking, sanitizer runs, or destructor-count instrumentation. The R decoder defect is tracked in [audit issue #8](https://github.com/opendp/opendp-audit/issues/8); no upstream issue or PR was created by this audit.
 
 ## Findings
 
-- **R correctness/usability:** `Option<(f64, AnyObject)>` with `Some` cannot decode its nested `AnyObject` through R's tuple converter. The problem is source-confirmed and not addressed by the inspected PR #3179.
+- **R correctness/usability:** `Option<(f64, AnyObject)>` with `Some` cannot decode its nested `AnyObject` through R's tuple converter. The source-confirmed mismatch is tracked in [audit candidate #8](https://github.com/opendp/opendp-audit/issues/8) and not addressed by the inspected PR #3179.
 - **Native resource ownership:** The legacy `Some` branch loses its boxed pointer array; pending PR #3179 supplies a scoped owner.
 - **Function handle:** No additional missing-free defect was identified for successful Rust-to-Python Function output in this bounded review. R generic Function output remains partially assessed because a reachable producing API was not identified.
 

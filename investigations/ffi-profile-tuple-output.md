@@ -30,10 +30,10 @@ An output typed `(PrivacyProfile, f64)` should roundtrip from the Rust privacy m
 
 ## Findings
 
-- **R correctness finding — source-confirmed:** An output of `(PrivacyProfile, f64)` reaches an unsupported `PrivacyProfile` member type in `voidptr_to_sexp`. The user-facing route is `make_zCDP_to_approxDP(make_approximate(make_gaussian(...)))` followed by its `d_in` privacy map. Runtime reproduction remains outstanding. **Upstream disposition: unreported; draft PR #3179 does not change the decoder.**
+- **R correctness finding — source-confirmed:** An output of `(PrivacyProfile, f64)` reaches an unsupported `PrivacyProfile` member type in `voidptr_to_sexp`. The user-facing route is `make_zCDP_to_approxDP(make_approximate(make_gaussian(...)))` followed by its `d_in` privacy map. Runtime reproduction remains outstanding. **Upstream disposition: unreported upstream; tracked in [audit candidate #7](https://github.com/opendp/opendp-audit/issues/7); draft PR #3179 does not change the decoder.**
 - **Python native-resource finding — confirmed by allocation tracing:** The `AnyObject` profile clone is adopted and eventually freed by the Python wrapper, but the separately boxed delta and pointer array are not. **Upstream disposition: pending draft PR #3179.**
 
-No GitHub issue or PR was created during this audit.
+The R nested-profile decoding finding is tracked in [audit issue #7](https://github.com/opendp/opendp-audit/issues/7). No upstream issue or PR was created by this audit.
 
 ## Unresolved questions
 
