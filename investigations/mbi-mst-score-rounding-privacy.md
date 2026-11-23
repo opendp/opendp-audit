@@ -26,7 +26,7 @@ Three binary columns `A,B,C` with `D0=[(0,0,0)]*4` and `D1=D0+[(0,0,1)]`. Each p
 
 Let the public joint synthetic model have all its mass at `(0,0,0)` with total `T=float(2**55+16)`. Its pairwise projections are all `[[T,0],[0,0]]`, so they are nonnegative and mutually consistent.
 
-The implementation computes `scores(D0)=[T,T,T]` and `scores(D1)=[T-8,T,T]`: L∞ difference 8 versus certified 1. This is an *executed NumPy 2.3.5 source-equivalent result*, not just a real-arithmetic sensitivity argument.
+The implementation computes `scores(D0)=[T,T,T]` and `scores(D1)=[T-8,T,T]`: L∞ difference 8 versus certified 1. This was first reproduced using source-equivalent NumPy 2.3.5 and subsequently confirmed by **actual OpenDP native score transformation** with a real MBI `MarkovRandomField`. The native projection derived from finite log-potentials has a small extra JAX normalization error (about 96 counts at this magnitude), which does not change the `[-8,0,0]` score difference.
 
 Even at small public model totals, score maps are not exactly sound: for a one-cell public projection `[[0.1,0],[0,0]]`, a count change 4 to 5 produces `4.9-3.9=1.0000000000000004 > 1` in NumPy. This smaller witness alone is **not** claimed to break the full noisy-max epsilon accounting because the general nonmonotone `LInfDistance` privacy map includes an extra factor of two.
 
@@ -44,13 +44,17 @@ This is a counterexample to privacy accounting for the *internal scorer-to-selec
 
 ## Verification and limitations
 
-**Executed locally:** `python -m unittest -v test_mst_public_model_rounding.py`, three tests passed with NumPy 2.3.5. The tests cover the neighboring count dictionaries, compatible synthetic projections, exact source NumPy score operation, and analytical selection likelihood.
+**Executed locally:** Three source-equivalent NumPy unit tests covering neighboring count dictionaries, compatible synthetic projections, and the analytic selection likelihood.
 
-**Not executed:** Native OpenDP FFI, `mbi.MarkovRandomField`, or a fully constructed high-level MST/contingency-table call. The high-level route may constrain achievable model totals; establish that reachability before claiming a deployed end-to-end privacy breach. A very large public model may be extremely unlikely under ordinary DP modeling, but the visible scorer lacks a finite-public-total restriction.
+**Executed natively:** [Successful OpenDP + MBI integration CI](https://github.com/opendp/opendp-audit/actions/runs/45254507499) used `opendp==0.16.0a20261122001`, `mbi==2.0.0`, NumPy `2.3.5`, and JAX binary64. The [test](../tools/integration/mbi_public_model_score_native.py) constructs an MBI `MarkovRandomField` with finite log-potentials `0` on state `000` and `-1000` on every other state, an **empty stored marginals vector** and the public total `float(2**55+16)`. MBI's actual variable-elimination implementation derives all pairwise projections, rather than returning injected marginals. The projections are mutually compatible and near `T`; JAX normalization incurs roughly 96 count units of rounding at this scale.
+
+Actual OpenDP `TypedDictDomain.member` checks passed on both neighbors. Invoking the native `_make_mst_scores` gave `[-8,0,0]`, while `t_scores.map(d_in)` returned 1. Composing with `then_noisy_max(scale=4)` reported `epsilon=0.5`. Crucially, the actual `_make_mst_select` constructor with `num_selections=1` and `d_out=0.5` also constructed, `map(d_in)` returned `0.5`, and it successfully sampled an edge. The finite-model, actual-selector evidence confirms the **internal privacy-map counterexample**.
+
+**Not executed:** A complete `make_contingency_table` call or its model re-estimation pipeline. That outer workflow might constrain public model totals. Thus the verified impact is an internal score/selection measurement that incorrectly certifies privacy; the deployed high-level release path remains an unresolved reachability question.
 
 ## Deduplication and mitigation
 
 - [Issue #117](https://github.com/opendp/opendp-audit/issues/117) observes that `np.linalg.norm(matrix, 1)` means induced matrix 1-norm rather than entrywise L1. In *exact arithmetic*, that distinction makes the L1 stability bound conservative. The new rounding issue is different and persists even if that utility issue is fixed with a floating-point flattened norm.
 - [Issue #125](https://github.com/opendp/opendp-audit/issues/125) records an analogous score-rounding failure in **AIM**, not this MST selection route.
 
-Recommended follow-up: test with an actual constructed public MBI model and one-step selection, then redesign the score computation or its certified stability map to bound numerical arithmetic, including cancellation and reductions. Never rely on the exact-arithmetic Lipschitz constant without a floating-point error analysis.
+Recommended follow-up: validate high-level `make_contingency_table` model reachability and redesign the score computation or its certified stability map to bound numerical arithmetic, including cancellation and reductions. Never rely on the exact-arithmetic Lipschitz constant without a floating-point error analysis.
