@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 import opendp.prelude as dp
+from opendp.extras.numpy._make_np_sum import make_np_sum, make_private_np_sum
 
 
 V = 1 << 60
@@ -41,7 +42,7 @@ def main():
         accepted, value = probe(f"domain.member({label})", lambda data=data: domain.member(data))
         assert accepted and value is True, f"domain did not accept {label}"
 
-    ok, trans = probe("make_np_sum", lambda: dp.numpy.make_np_sum(domain, metric))
+    ok, trans = probe("make_np_sum", lambda: make_np_sum(domain, metric))
     if not ok:
         raise AssertionError("The reported transformation cannot be constructed") from trans
 
@@ -66,7 +67,7 @@ def main():
     # separately to avoid claiming a valid private release if checking fails.
     m_ok, measurement = probe(
         "make_private_np_sum",
-        lambda: dp.numpy.make_private_np_sum(
+        lambda: make_private_np_sum(
             domain, metric, dp.max_divergence(), float(V)
         ),
     )
