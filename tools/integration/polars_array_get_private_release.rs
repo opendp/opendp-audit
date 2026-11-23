@@ -11,7 +11,7 @@
 //! bound is claimed solely from this test.
 
 use opendp::core::Domain;
-use opendp::domains::LazyFrameDomain;
+use opendp::domains::{LazyFrameDomain, Margin};
 use opendp::error::Fallible;
 use opendp::measurements::make_private_lazyframe;
 use opendp::measures::MaxDivergence;
@@ -59,7 +59,8 @@ fn private_query(input: LazyFrame, null_on_oob: bool) -> Fallible<LazyFrame> {
 
 #[test]
 fn private_release_exposes_oob_status_for_get_false() -> Fallible<()> {
-    let domain = LazyFrameDomain::new_from_schema(input_schema())?;
+    let domain = LazyFrameDomain::new_from_schema(input_schema())?
+        .with_margin(Margin::select().with_max_length(1))?;
     let valid = input_frame(0)?;
     let invalid = input_frame(2)?;
 
@@ -98,7 +99,8 @@ fn private_release_exposes_oob_status_for_get_false() -> Fallible<()> {
 
 #[test]
 fn private_release_get_true_does_not_raise_oob() -> Fallible<()> {
-    let domain = LazyFrameDomain::new_from_schema(input_schema())?;
+    let domain = LazyFrameDomain::new_from_schema(input_schema())?
+        .with_margin(Margin::select().with_max_length(1))?;
     let valid = input_frame(0)?;
     let invalid = input_frame(2)?;
     assert!(domain.member(&valid)?);
