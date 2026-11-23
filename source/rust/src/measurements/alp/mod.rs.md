@@ -18,6 +18,7 @@ updated: 2026-11-22
 | --- | --- | --- | --- | --- |
 | `exponent_next_power_of_two` | correctness/projection-size-bounds | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Boundary analysis](../../../../../investigations/alp-projection-size-overflow.md) |
 | `make_alp_state` | correctness/projection-size-bounds | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Constructor witness](../../../../../investigations/alp-projection-size-overflow.md) |
+| `make_alp_state_with_hashers` | correctness/nonfinite-constructor-guards | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Nonfinite parameter panic](#nonfinite-parameter-panic) |
 
 ## Analysis
 
@@ -27,6 +28,18 @@ updated: 2026-11-22
 
 **Impact:** Low-severity constructor availability/robustness issue from public parameters, not a demonstrated privacy leak or inaccurate DP map. A requested `2^64`-sized projection cannot be supported, so fallible parameter rejection is appropriate. Existing upstream tests only check exponents for inputs 1, 2, 3, and 7. Checks of audit/upstream issues and PRs found no equivalent tracked fix; no new issue was created in this run.
 
+### Nonfinite parameter panic
+
+**Finding:** `make_alp_state_with_hashers` validates `scale` and `alpha` using `is_sign_negative() || is_zero()` but not `is_finite()`. A positive-sign NaN, explicitly represented by `f64::from_bits(0x7ff8_0000_0000_0000)`, passes the check. `are_parameters_invalid(alpha, scale)` subsequently invokes `FBig::<Zero>::inf_cast(scale).expect("impl is infallible")` and the analogous `alpha` conversion. The [fallible `FBig` cast](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/traits/cast/mod.rs) wraps `FBig::try_from(v)` and returns `FailedCast` for a NaN, so `expect` panics instead of returning `Err`.
+
+**Minimal proposed Rust regression (not compiled):** `make_alp_state_with_hashers::<u32, u32>(MapDomain::default(), L01InfDistance::default(), f64::from_bits(0x7ff8_0000_0000_0000), 1.0, 1, vec![])`. An `alpha` NaN analog reaches the second `expect`. The separate size-overflow finding is avoided by `projection_size = 1`.
+
+**Executed:** Python 3 checked that the specified NaN has a positive sign and is not zero. **Not executed:** Compiled OpenDP, Rust `catch_unwind` regression, or FFI. The finding is tracked in [candidate issue #5](https://github.com/opendp/opendp-audit/issues/5) (upstream disposition `Unreported`), distinct from [upstream ALP privacy-rounding issue #3249](https://github.com/opendp/opendp/issues/3249).
+
+**Impact:** Low-severity constructor availability / public-parameter validation. This does **not** demonstrate a data-dependent panic or privacy breach. The high-level `make_alp_queryable` was not shown to reach the same NaN `expect` path.
+
 ## Next checks
 
 Execute a native Rust checked-overflow regression; validate `exp < usize::BITS` before shifting; reject overflow through `Fallible`; verify boundary behavior with debug/release builds and 32-bit `usize` targets. See [investigation](../../../../../investigations/alp-projection-size-overflow.md).
+
+- For [candidate #5](https://github.com/opendp/opendp-audit/issues/5), add a regression for positive-sign NaN `scale` and `alpha` and reject nonfinite values before `are_parameters_invalid`.
