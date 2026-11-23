@@ -1,7 +1,7 @@
 ---
 schema_version: 1
 source: rust/src/combinators/privacy_filter/mod.rs
-updated: 2026-11-22
+updated: 2026-11-23
 ---
 
 # `rust/src/combinators/privacy_filter/mod.rs`
@@ -11,7 +11,7 @@ updated: 2026-11-22
 - **Audit scope:** Non-deprecated, `contrib`-gated `make_privacy_filter` and `new_continuation_rule`: the post-query privacy-loss gate, handling of failed measurement/postprocessing invocations, permanent exhaustion, and the stated privacy-map boundary. Not a general proof of arbitrary odometers.
 - **Invariants:** A query outcome (including an `Err`) is never returned if the *updated* odometer privacy loss exceeds the configured budget. A successful threshold crossing irreversibly exhausts the wrapper. The outer measurement's privacy map returns `d_out` only for input distances at most configured `d_in`.
 - **Assumptions:** A valid underlying odometer reliably accounts for every accepted query, including errors after private releases; `PrivacyLoss(d_in)` returns the correct cumulative bound without exposing private information; comparisons via `ProductOrd` are sound; the programmer observes return values, not unmodeled side effects, timing, or resource exhaustion. Incomparable values can produce errors, not a successful release.
-- **Reviewed upstream revision:** `ef1a238634d6196b01a1a1e77d3d5ad2340e3094`. Evidence: [privacy filter](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/privacy_filter/mod.rs), [fully adaptive odometer](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/sequential_composition/fully_adaptive/mod.rs), [interactive query wrapper](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/interactive/mod.rs), [core odometer](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/core/mod.rs), [upstream regression tests](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/privacy_filter/test.rs).
+- **Initial reviewed upstream revision:** `ef1a238634d6196b01a1a1e77d3d5ad2340e3094`. **Budget validation and response gating re-reviewed on current main:** [`a010591f55b1713c926f8e355091471634480307`](https://github.com/opendp/opendp/blob/a010591f55b1713c926f8e355091471634480307/rust/src/combinators/privacy_filter/mod.rs). Evidence: [privacy filter](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/privacy_filter/mod.rs), [fully adaptive odometer](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/sequential_composition/fully_adaptive/mod.rs), [interactive query wrapper](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/interactive/mod.rs), [core odometer](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/core/mod.rs), [upstream regression tests](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/combinators/privacy_filter/test.rs).
 
 ## Symbol coverage
 
@@ -21,6 +21,8 @@ updated: 2026-11-22
 | `combinators::privacy_filter::new_continuation_rule` | correctness/terminal-exhaustion | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Transition analysis](#transition-analysis) |
 | `combinators::privacy_filter::make_privacy_filter` | privacy/map-bound | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Map analysis](#map-analysis); relies on a valid odometer contract |
 | `combinators::privacy_filter::new_continuation_rule` | privacy/failed-postprocessing-accounting | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Cross-file investigation](../../../../../investigations/privacy-filter-failure-accounting.md), dependent on odometer bookkeeping |
+| `combinators::privacy_filter::make_privacy_filter` | privacy/nonnegative-budget-precondition | Audited | `a010591f55b1713c926f8e355091471634480307` | [Budget construction validation](#budget-construction-validation) and merged [upstream PR #3287](https://github.com/opendp/opendp/pull/3287) |
+| `combinators::privacy_filter::new_continuation_rule` | privacy/over-budget-answer-withholding | Audited | `a010591f55b1713c926f8e355091471634480307` | [Transition analysis](#transition-analysis) and [fully adaptive audit](../../../../../source/rust/src/combinators/sequential_composition/fully_adaptive/mod.rs.md) |
 
 ## Analysis
 
@@ -38,9 +40,15 @@ This ordering is essential: returning an error from private postprocessing befor
 
 ### Map analysis
 
-**Conclusion:** For comparable input distances, the map returns the configured budget when `d_in_p <= d_in`, and otherwise fails with `RelationDebug`. The function does not independently prove or enforce nonnegative/well-formed budget distances, nor verify that an arbitrary supplied odometer meets its semantic contract. The constructor delegates validation of the input metric/domain pair to `Measurement::new`. The map relies on `Odometer`'s abstract guarantees.
+**Conclusion:** For comparable input distances, the map returns the configured budget when `d_in_p <= d_in`, and otherwise fails with `RelationDebug`. The original reviewed revision did **not** enforce nonnegative/well-formed budget distances, but that assessment is superseded **on current main** by [merged PR #3287](https://github.com/opendp/opendp/pull/3287). The constructor now sets `zero = odometer.output_measure.compose(vec![])?` and rejects `d_out` if `!d_out.total_ge(&zero)?`, so negative and NaN budgets cannot silently cancel positive privacy loss. The constructor does not verify that an arbitrary supplied odometer meets its semantic contract. The constructor delegates validation of the input metric/domain pair to `Measurement::new`. The map relies on `Odometer`'s abstract guarantees.
 
-**Status:** Partial because the full general-odometer contract, unusual budgets and distance types, and failure behavior of custom queryables are not independently verified here.
+**Status:** Partial for the *general-odometer validity* property; the newly isolated nonnegative-budget precondition is source-audited. Full general-odometer contract, unusual distance types, and failure behavior of custom queryables remain unverified.
+
+### Budget construction validation
+
+On upstream main `a010591f55b1713c926f8e355091471634480307`, the filter's `make_privacy_filter` checks `d_out.total_ge(&zero)?` where `zero` is `odometer.output_measure.compose(vec![])?`. The float `ProductOrd` implementation errors on NaN; negative scalar and negative components of tuple budgets are rejected. The [current native regression](https://github.com/opendp/opendp/blob/a010591f55b1713c926f8e355091471634480307/rust/src/combinators/privacy_filter/test.rs) explicitly checks negative and NaN `d_out` for `MaxDivergence` and `Approximate<MaxDivergence>`; these tests were inspected only. This addresses the previously open negative-budget counterexample [upstream issue #3286](https://github.com/opendp/opendp/issues/3286), merged as [PR #3287](https://github.com/opendp/opendp/pull/3287). The error-answer withholding control flow is unchanged from the prior review and reverified by the source-order check in [fully adaptive source audit](../../../../../source/rust/src/combinators/sequential_composition/fully_adaptive/mod.rs.md). No new leak shown.
+
+`interactive::wrap` has a separate panic-unwind TLS restoration bug under a **caught Rust panic**; the targeted repair exists in [open PR #3277](https://github.com/opendp/opendp/pull/3277), not on main. This is **not** a normal `Fallible` error and does not invalidate the source-traced failure accounting, but it is a remaining runtime robustness boundary.
 
 ## Next checks
 
