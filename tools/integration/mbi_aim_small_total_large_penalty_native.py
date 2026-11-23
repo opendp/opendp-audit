@@ -18,7 +18,7 @@ from opendp.extras.mbi._aim import _make_aim_scores, _make_aim_select
 from opendp.extras.mbi._utilities import typed_dict_domain, typed_dict_distance, make_noise_marginal
 
 PENALTY = float(2**54 + 8)
-NUM_CATEGORIES = 9
+NUM_CATEGORIES = 65
 MEASURE_SPLIT = NUM_CATEGORIES / PENALTY
 CLIQUE_A = ("A",)
 CLIQUE_B = ("B",)
