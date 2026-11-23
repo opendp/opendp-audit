@@ -35,7 +35,17 @@ The constructor rejects array and categorical operands, excludes unsupported ope
 
 For supported numeric/boolean implicit coercion, `is_numeric_coercion` checks the two source datatype families; the output dtype is obtained via Polars `expr.to_field` rather than guessed. The upstream tests include Int64/UInt64 extremes, Float32/Float64 NaN and infinity, nullable operands, and dynamic literal combinations. These cases were read but not independently run.
 
-The general property that every allowed numeric implicit promotion and integer division is total and cannot raise a data-dependent exception is **not established** by this review; the exact linked Polars arithmetic and optimized plans should be tested before upgrading the privacy property to Audited.
+The general property that every allowed numeric implicit promotion and integer division is total and cannot raise a data-dependent exception is **not established** by this review. A follow-up below verifies the pinned implementation of ordinary signed integer floor division and modulo under a bounded independent model, but optimized execution and mixed coercion remain to be tested before upgrading the privacy property to Audited.
+
+### Exceptional integer division and modulo in pinned Polars
+
+**Dependency revision.** OpenDP at `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` pins Rust Polars `0.52.0` and uses `[patch.crates-io]` at the Python tag `py-1.36.1` (commit `2a151c10fa76790711c2f75e6d012dd69c627ddd`) in its [Cargo manifest](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/Cargo.toml). We inspected the historical tagged Polars kernels, not the mutable current upstream Polars implementation.
+
+**Tracing ordinary expression execution:** `make_expr_binary` accepts `FloorDivide` and `Modulus`, with output nullability set even for non-null source operands. [Polars `BinaryExpr` dispatch](https://github.com/pola-rs/polars/blob/2a151c10fa76790711c2f75e6d012dd69c627ddd/crates/polars-expr/src/expressions/binary.rs) routes `FloorDivide` to [`floor_div_series`](https://github.com/pola-rs/polars/blob/2a151c10fa76790711c2f75e6d012dd69c627ddd/crates/polars-ops/src/series/ops/floor_divide.rs), which applies `wrapping_floor_div` kernels. The signed [vector/vector, scalar-right, and scalar-left kernels](https://github.com/pola-rs/polars/blob/2a151c10fa76790711c2f75e6d012dd69c627ddd/crates/polars-compute/src/arithmetic/signed.rs) mask zero denominators as null, return null for zero scalar divisors, and use wrapping negation for the `-1` scalar divisor. The common [`FloorDivMod::wrapping_floor_div_mod`](https://github.com/pola-rs/polars/blob/2a151c10fa76790711c2f75e6d012dd69c627ddd/crates/polars-utils/src/floor_divmod.rs) checks zero before performing the signed `wrapping_div` and `wrapping_rem`; importantly, `MIN / -1` is wrapping, not panicking. The [unsigned kernels](https://github.com/pola-rs/polars/blob/2a151c10fa76790711c2f75e6d012dd69c627ddd/crates/polars-compute/src/arithmetic/unsigned.rs) guard vector and scalar zero denominators before evaluating integer division/remainder. [Floating kernels](https://github.com/pola-rs/polars/blob/2a151c10fa76790711c2f75e6d012dd69c627ddd/crates/polars-compute/src/arithmetic/float.rs) implement their divisions as floating operations, with IEEE `inf` or `NaN` behavior where applicable.
+
+**Independent model executed:** A pure JavaScript `BigInt` simulation encoded the signed helper's truncation-plus-remainder floor correction, including `wrapping_div` and a nullable zero-denominator outcome. An independent mathematical oracle used a *sign-normalized floor formula* for an exact integer quotient, wrapped its result to the given bit width, and computed the exact remainder. Exhaustive `i8` pairs included every `(-128..=127)^2` combination (**65,536**), including all **256** zero divisors and `(-128, -1)`. **100,000** `i64` pairs included the 10×10 Cartesian boundary alphabet `{MIN,MIN+1,-17,-3,-1,0,1,2,17,MAX}` and deterministic xorshift64-generated signed inputs (seed `0x91cb1a84`). **Zero mismatches** across **165,536** comparisons. The `MIN/-1` result wraps, as the pinned source promises, and zero denominators have a null validity mask.
+
+The model is of specified algorithm semantics, **not compiled Rust or native Polars**, and cannot by itself establish behavior of optimizations, dynamic literals, SIMD backends, other numeric conversions, or full private query execution. It resolves the narrow signed-minimum overflow hypothesis *at the pinned source/algorithm level* without establishing the broader privacy property.
 
 ### Historical fixes and coordination
 
@@ -47,7 +57,7 @@ All three upstream issues were closed. The accepted explicit guards for the two 
 
 ### Verification limitations
 
-Static source/test examination and 11 source-guard assertions were executed through the connected GitHub repository; the source-policy arithmetic table covered 28 combinations. The local runtime lacks Polars and OpenDP, so no native Rust/Polars tests were executed. Static assertions do not establish dynamic compiler-version semantics, runtime arithmetic error behavior, or privacy guarantees.
+Static source/test examination and 11 source-guard assertions were executed through the connected GitHub repository; the source-policy arithmetic table covered 28 combinations; the `BigInt` signed division/remainder model compared 165,536 integer pairs. The local runtime lacks Polars and OpenDP, so no native Rust/Polars tests were executed. Static assertions do not establish dynamic compiler-version semantics, runtime arithmetic error behavior, or privacy guarantees.
 
 ## Findings
 
@@ -56,5 +66,5 @@ Static source/test examination and 11 source-guard assertions were executed thro
 ## Unresolved questions
 
 - Verify non-nullability of `EqValidity`/`NotEqValidity` and the division/remainder null contract in the exact Polars dependency version under optimized execution.
-- Check signed-minimum/`-1` integer division and other arithmetic edge cases for data-dependent exceptions.
+- Confirm the signed-minimum/`-1`, zero-denominator and scalar/vector arithmetic paths through compiled Polars `py-1.36.1` and optimized lazy plans; the source/model review found no failure in the examined kernels.
 - Extend review to other operations that can introduce nulls or errors via implicit casts or optimizer rewrites.
