@@ -75,5 +75,34 @@ def main():
         _, _ = probe("private_sum.map(d_in=2)", lambda: measurement.map(2))
 
 
+    # Unsigned control: its represented-output distance is below u64::MAX,
+    # so this also rules out a metric-range-only explanation.
+    u = np.full((16, 1), V, dtype=np.uint64)
+    up = u.copy()
+    up[0, 0] = 0
+    udomain = dp.numpy.array2_domain(
+        T="u64", norm=float(V), p=1, size=16, num_columns=1, nan=False
+    )
+    for label, data in (("u", u), ("u_prime", up)):
+        accepted, value = probe(
+            f"unsigned_domain.member({label})",
+            lambda data=data: udomain.member(data),
+        )
+        assert accepted and value is True
+    success, utrans = probe("make_np_sum[u64]", lambda: make_np_sum(udomain, metric))
+    assert success, "unsigned constructor rejected"
+    for label, data, expected in (("u", u, 0), ("u_prime", up, 15 * V)):
+        success, result = probe(
+            f"unsigned_sum({label})", lambda data=data: utrans(data)
+        )
+        assert success
+        assert int(np.asarray(result)[0]) == expected
+    map_ok, mapped = probe("unsigned_sum.map(d_in=2)", lambda: utrans.map(2))
+    if map_ok:
+        assert mapped >= 15 * V, "Unsigned native map underestimates true distance"
+    else:
+        print("UNSIGNED_MAP_REJECTED; no native epsilon certificate", flush=True)
+
+
 if __name__ == "__main__":
     main()
