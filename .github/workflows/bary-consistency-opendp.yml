@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/bary-consistency-opendp.yml'
       - 'tools/integration/bary_consistency_open_dp.rs'
+      - 'tools/integration/bary_consistency_wide_open_dp.rs'
+      - 'tools/integration/patch_bary_consistency_wide.py'
   workflow_dispatch:
 
 permissions:
@@ -40,3 +42,17 @@ jobs:
           cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
             --no-default-features --features contrib \
             --test bary_consistency_open_dp -- --nocapture
+      - name: Apply experimental f64-intermediate patch only to CI checkout
+        shell: bash
+        run: |
+          python tools/integration/patch_bary_consistency_wide.py \
+            opendp-upstream/rust/src/transformations/b_ary_tree/consistency_postprocessor/mod.rs
+          cp tools/integration/bary_consistency_wide_open_dp.rs \
+            opendp-upstream/rust/tests/bary_consistency_wide_open_dp.rs
+      - name: Test patched OpenDP constructor and finite leaf outputs
+        env:
+          CARGO_TERM_COLOR: always
+        run: |
+          cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
+            --no-default-features --features contrib \
+            --test bary_consistency_wide_open_dp -- --nocapture
