@@ -22,6 +22,8 @@ updated: 2026-11-23
 | `measurements::noise_threshold::distribution::gaussian::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | privacy/gaussian-zero-distance | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Zero distance and zero noise scale](#zero-distance-and-zero-noise-scale) |
 | `measurements::noise_threshold::distribution::gaussian::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | privacy/gaussian-tail-composition | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Tail and delta accounting](#tail-and-delta-accounting) |
 
+| `measurements::noise_threshold::distribution::gaussian::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | numerical/delta-resolution | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Joint delta precision floor](#joint-delta-precision-floor) |
+
 ## Analysis
 
 ### Sensitivity tightening
@@ -43,7 +45,13 @@ After evaluating `rho >= L2'^2 / (2 s^2)`, the map requires `threshold magnitude
 
 The Gaussian tail helper applies the continuous Gaussian tail bound at the integer threshold, using downward-rounded `t/(s sqrt(2))` and an upward adjustment to the single-precision `erfc` result. This review checked the call graph, parameter signs, and the intended rounding directions, but **did not independently prove the library's `erfc` error bound**. See the [cross-file investigation](https://github.com/opendp/opendp-audit/blob/main/investigations/gaussian-threshold-tail-accounting.md) for an independent finite-sum numerical sanity check covering 20 cases.
 
-**Conclusion:** No counterexample identified in the bounded analysis. The status remains **Partial** pending a compiled Rust test run, verified elementary tail helper bounds at extreme inputs, and review of the underlying random sampler.
+**Conclusion:** No evidence of an **understated privacy bound** in the bounded analysis. A separate numerical **overestimation** defect in the joint delta expression is documented below. The overall privacy property remains **Partial** pending a compiled Rust test run, verified elementary tail helper bounds at extreme inputs, and review of the sampler.
+
+### Joint delta precision floor
+
+**New numerical finding:** The expression is conservative but has a binary64 precision floor around `2^-53` for `L0 = 1` and positive `delta_single < 2^-53`. This causes a loss of privacy-accounting tightness, not an understated privacy loss. See [candidate issue #3](https://github.com/opendp/opendp-audit/issues/3) and the [cross-file roundoff investigation](https://github.com/opendp/opendp-audit/blob/main/investigations/threshold-delta-roundoff-floor.md).
+
+For example with Gaussian `scale=1`, `threshold=11`, and distance `(L0,L2,L∞)=(1,1,1)`, the single-key tail upper bound is approximately `7.62e-24`. Directed subtraction rounds `1 - p` down to the `f64` immediately below 1, yielding a joint bound of `2^-53 ≈ 1.1102230246251565e-16`. A conservative union bound would instead be `p` for `L0=1`. This is **Audited** as a numerical cancellation effect from the pinned source and independently executed Python arithmetic, not a compiled Rust regression.
 
 ## Next checks
 

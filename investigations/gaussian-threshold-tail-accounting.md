@@ -35,7 +35,7 @@ The upstream Gaussian threshold unit tests exercise negative `L2`, zero sensitiv
 
 ## Findings
 
-No new defect identified **within the declared scope and assumptions**. Earlier incorrect threshold inclusivity was addressed by [upstream PR #3058](https://github.com/opendp/opendp/pull/3058), merged before the reviewed revision; this report does not reopen it. No new issue or upstream PR is warranted by the evidence gathered here.
+No new **privacy underestimate** identified within the declared scope and assumptions. A separate source-supported **numerical overestimation** affecting the same joint-delta expression is tracked as [audit candidate #3](https://github.com/opendp/opendp-audit/issues/3) and in the [roundoff investigation](https://github.com/opendp/opendp-audit/blob/main/investigations/threshold-delta-roundoff-floor.md). Earlier incorrect threshold inclusivity was addressed by [upstream PR #3058](https://github.com/opendp/opendp/pull/3058), merged before the reviewed revision; this report does not reopen it. No new upstream issue or PR was created; the precision finding is tracked only in the audit repository.
 
 ## Unresolved questions
 

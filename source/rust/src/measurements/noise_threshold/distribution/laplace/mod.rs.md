@@ -22,6 +22,8 @@ updated: 2026-11-23
 | `measurements::noise_threshold::distribution::laplace::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | privacy/zero-sensitivity | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Zero-sensitivity and zero-scale branches](#zero-sensitivity-and-zero-scale-branches) |
 | `measurements::noise_threshold::distribution::laplace::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | privacy/laplace-tail-accounting | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Positive-sensitivity epsilon and delta](#positive-sensitivity-epsilon-and-delta) |
 
+| `measurements::noise_threshold::distribution::laplace::NoiseThresholdPrivacyMap::noise_threshold_privacy_map` | numerical/delta-resolution | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Joint delta precision floor](#joint-delta-precision-floor) |
+
 ## Analysis
 
 ### Distance guards and tightening
@@ -53,6 +55,12 @@ For integer `m >= 0`, the exact discrete Laplace one-key tail is `p = exp(-m/s) 
 The signed-negative threshold direction uses the same magnitude-based map and is justified by the symmetry of the Laplace noise; the core mechanism filters values below a negative threshold. Existing upstream tests include integer, float, large-scale, zero-scale, signed-threshold and empirical release cases. These tests were inspected but not run here.
 
 **Conclusion:** No contradictory bound identified under the stated tail and sampler contracts. The property is **Partial** because the contracts, extreme-parameter directed rounding, independence of underlying samplers, and the full privacy proof were not independently established.
+
+### Joint delta precision floor
+
+**New numerical finding:** The expression is conservative but has a binary64 precision floor around `2^-53` for `L0 = 1` and positive `delta_single < 2^-53`. This causes a loss of privacy-accounting tightness, not an understated privacy loss. See [candidate issue #3](https://github.com/opendp/opendp-audit/issues/3) and the [cross-file roundoff investigation](https://github.com/opendp/opendp-audit/blob/main/investigations/threshold-delta-roundoff-floor.md).
+
+The Laplace privacy map uses the same `1 - (1-p)^L0` directed-rounding chain. For `L0=1` and any positive `p` below `2^-53`, the computed delta is bounded below by `2^-53` although the direct conservative union bound `p` is much smaller. The effect is **Audited** at the source arithmetic level; the exact Laplace threshold reproducer has not been run as compiled Rust.
 
 ## Next checks
 
