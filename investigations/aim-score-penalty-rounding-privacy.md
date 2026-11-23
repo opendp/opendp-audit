@@ -127,3 +127,35 @@ The event probabilities were computed analytically by enumerating all candidate 
 
 **Remediation:** Bound actual numerical error in `exact - synth`, norm reduction and (for AIM) penalty subtraction in the reported score stability; test with large but finite public models and exact-binary64 spacing. Fixing only the selection mechanism's nominal scale calculation would leave the score transformation contract false.
 
+
+
+## Second, small-total Context violation using penalty rounding
+
+The original `P≈2**54` noise-penalty counterexample now also has a **successful high-level release-path reproduction**. [Native successful CI](https://github.com/opendp/opendp-audit/actions/runs/45261341996) executes [the test](../tools/integration/mbi_aim_small_total_large_penalty_native.py) on OpenDP 0.16.0-nightly.20261122.1, MBI 2.0.0, Polars 1.36.1, NumPy 2.3.5 and JAX f64.
+
+The MBI model has *public total two* and finite joint log-potentials giving actual inferred one-way marginals `A=[1,1,0,...]` and `B=[2,0,0,...]`. Each of the three public keys has 64 concrete categories and a null bucket (65 cells). This is a small count model with a moderate finite categorical schema, **not** the previous huge-total model.
+
+For private `D0=[(0,0,0)]*2` and `D1=D0+[(0,1,0)]`, both under `FrameDistance<SymmetricDistance>` with `unit_of(contributions=1)`, use:
+
+```python
+PENALTY = float(2**54 + 8)
+NUM_CATEGORIES = 65
+MEASURE_SPLIT = NUM_CATEGORIES / PENALTY
+AIM(
+    queries=[Count(('A',)), Count(('B',))],
+    rounds=1,
+    oneway_split=0,
+    measure_split=MEASURE_SPLIT,
+    estimator=public_data_independent_estimator,  # HBC feature enabled
+)
+```
+
+At `d_out=1` for pure DP, `d_measure=MEASURE_SPLIT≈3.608224830031757e-15`, `E=1/d_measure` per cell, `65 E = P`. The native `_make_aim_scores` uses that exact formula and returns adjacent scores differing by `[4,0]`, despite a stability map of `1`. Native `_make_aim_select` calibrates a scale around `2.000000000000008`. The `B` selection event occurs with probability `0.5` under `D0` and `0.06766764161830689` under `D1`, giving **log likelihood ratio ≈ 2.0 > overall advertised ε=1**.
+
+The **entire public `Context.compositor → query → contingency_table(table=public_table, algorithm=AIM(...)) → release` path succeeds on both neighbors** and returns a `ContingencyTable.marginals.cliques()` revealing the private selected clique. The fixed public estimator is data-independent and only enabled under the explicitly permitted `honest-but-curious` feature. This is a second, distinct *parameter-regime* exploitation of the same numerical stability defect as issue [#125](https://github.com/opendp/opendp-audit/issues/125); no duplicate issue was opened.
+
+### Numerical search interaction
+
+With 3 or 9 categories, the internal score/selector counterexample passes, but the complete AIM release fails when calibrating the count-noise scale: OpenDP's `binary_search(bounds=(0.0,None))` cannot probe beyond `2**49` for `f64`. This is the *previously reported, closed* [audit issue #102](https://github.com/opendp/opendp-audit/issues/102). Increasing the number of cells to 65 keeps `P` huge while reducing the required `1/d_measure` below that search horizon. The successful 65-category CI run demonstrates that #102 is a contingent availability barrier, not a privacy guarantee.
+
+**Remediation:** Prevent roundoff amplification in `np.linalg.norm(exact - synth,1) - penalty` or include a sound finite-precision stability margin when composing with `then_noisy_max`. Check score values after all public offset and projection operations rather than only relying on exact-real L1 sensitivity.
