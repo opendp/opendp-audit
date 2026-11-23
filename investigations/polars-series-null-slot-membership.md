@@ -2,7 +2,7 @@
 schema_version: 1
 upstream_commit: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
 updated: 2026-11-23
-status: Partial
+status: Audited
 ---
 
 # Nullable `SeriesDomain::member` examines physical payloads of null slots
@@ -44,4 +44,4 @@ In the `atom_member!` macro, replace the validity-ignoring iterator with `arr.no
 
 ## Evidence status
 
-**Source/API discrepancy:** verified on the exact pinned OpenDP and Polars revisions. The compiled regression was submitted to GitHub Actions as part of audit #83; its result must be recorded separately before claiming native reproduction. The standalone Python reference model checks logical validity-bitmap semantics but does not call OpenDP or Polars.
+**Source/API discrepancy:** verified on the exact pinned OpenDP and Polars revisions. The compiled regression **succeeded** in [GitHub Actions run 45109173447](https://github.com/opendp/opendp-audit/actions/runs/45109173447): both native Rust tests passed against OpenDP `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` with pinned Polars 1.36.1. It verified the null slot's hidden physical payload `0`, the validity-aware iterator's single nonnull value `2`, and the incorrect `SeriesDomain::member == false` for the logically valid nullable bounded series. The standalone Python reference model checks the general validity-bitmap invariant but does not call OpenDP or Polars.
