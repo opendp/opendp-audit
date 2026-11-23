@@ -8,9 +8,9 @@ updated: 2026-11-23
 
 ## Scope and assumptions
 
-- **Audit scope:** `make_np_sum` output-domain construction and integer NumPy summation dtype, with the generated private wrapper and typed callback conversion followed across module boundaries. A previous audit independently addressed public column-count validation.
-- **Invariant:** The emitted array belongs to the advertised vector output domain and is compatible with the FFI callback's promised carrier type for every valid input.
-- **Assumptions:** `idealized-numerics` and `contrib` enabled; well-formed fixed-shape arrays; supported integer input types. The NumPy accumulator type is observed directly; native OpenDP has not been executed.
+- **Audit scopes:** (1) `make_np_sum` output-domain construction and integer NumPy summation dtype, with the generated private wrapper and typed callback conversion; (2) independently, the unsized-data nonzero-origin L2 sensitivity calculation and its Gaussian calibration path. A previous audit addressed public column-count validation.
+- **Invariants:** The emitted array belongs to its advertised vector output domain; and the reported unsized-data L2 stability map conservatively bounds the actual change in summed row vectors for all admitted neighboring arrays.
+- **Assumptions:** `idealized-numerics` and `contrib` enabled; well-formed arrays and supported integer input types for the first scope. The second scope uses float64 data, `size=None`, `p=2`, one column, public origin `[1e-200]`, public radius `1e-200` or `0`, and NumPy 2.3.5 semantics. Only independent NumPy calculations, not native OpenDP, were executed.
 - **Source links:** [`make_np_sum`](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/python/src/opendp/extras/numpy/_make_np_sum/__init__.py), [domain implementation](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/python/src/opendp/extras/numpy/__init__.py), [FFI adapter](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/rust/src/internal/mod.rs), [FFI conversion](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/python/src/opendp/_convert.py), [proof](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/python/src/opendp/extras/numpy/_make_np_sum/make_np_sum.tex).
 
 ## Symbol coverage
@@ -20,6 +20,7 @@ updated: 2026-11-23
 | `opendp.extras.numpy._make_np_sum.make_np_sum` | correctness/output-domain-membership | Audited | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [Counterexample and cross-file investigation](../../../../../../../investigations/numpy-sum-integer-dtype-promotion.md); [defect #123](https://github.com/opendp/opendp-audit/issues/123). |
 | `opendp.extras.numpy._make_np_sum.make_private_np_sum` | correctness/noise-chain-input-carrier | Partial | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | Generated via `with_privacy`, so the sum type mismatch enters composition; native invocation and exact error are untested. |
 | `opendp.extras.numpy._make_np_sum.make_np_sum` | privacy/integer-sum-stability | Partial | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | Reviewed the declared metric and type only; full integer overflow/stability and complete native execution not established. |
+| `opendp.extras.numpy._make_np_sum.make_np_sum` | privacy/unsized-sum-origin-norm-rounding | Audited | `7acfb2cdcee7d39fc26a6ade7edac15249c52f4b` | [New analysis](#unsized-sum-origin-norm-rounding), [investigation](../../../../../../../investigations/numpy-unsized-sum-origin-norm-underflow.md), [defect #131](https://github.com/opendp/opendp-audit/issues/131). |
 
 ## Analysis
 
@@ -31,6 +32,18 @@ A standalone NumPy 2.3.5 execution confirmed this behavior and the specific `int
 
 The [investigation](../../../../../../../investigations/numpy-sum-integer-dtype-promotion.md) records the full witness, supporting modules, and the limitation. [Upstream #3153](https://github.com/opendp/opendp/issues/3153), fixed by [#3188](https://github.com/opendp/opendp/pull/3188), is a separate unknown-output-width problem and does not fix dtype promotion.
 
+### Unsized sum origin-norm rounding
+
+**Conclusion:** `make_np_sum` uses `norm += np.linalg.norm(origin, ord=p)` when the dataset size is unknown. For `p=2` the normal NumPy norm implementation can underflow to zero for a finite nonzero origin because it squares small coordinates. The row domain, however, uses [a scaled norm-membership routine](https://github.com/opendp/opendp/blob/7acfb2cdcee7d39fc26a6ade7edac15249c52f4b/python/src/opendp/extras/numpy/_norm.py), so its admitted rows can have larger norms than the numerical stability map.
+
+**Counterexample:** With `norm=1e-200`, `p=2`, `size=None`, `origin=np.array([1e-200])`, and `T=f64`, compare the empty `(0,1)` array to a one-row array `[[2e-200]]`. Both pass the explicit scaled membership predicates, and are one insertion apart under `SymmetricDistance`. The implementation's `np.linalg.norm(origin, 2)` returns **0**, so the reported `map(1)` is `1e-200`; the actual one-dimensional output L2 distance is `2e-200`. With zero radius and the same origin, the reported map is exactly zero despite a nonzero possible sum.
+
+Under ideal Gaussian noise with scale `sigma=1e-200`, the output shift corresponds to `rho=2` rather than claimed `rho=0.5`, a fourfold privacy-parameter underestimate. The source-level wrapper `with_privacy` routes the L2 sum output to Gaussian noise. This is **not** a native OpenDP or complete measurement execution. The constructor requires the `idealized-numerics` feature, whose existing mathematical proof explicitly ignores machine rounding; this audit exhibits the difference between that proof model and concrete NumPy arithmetic.
+
+**Executed:** Independent NumPy 2.3.5 checks of the exact scaled membership predicate, the `np.linalg.norm` underflow, the sum outputs and numerical map; an analytic Gaussian zCDP calculation. [Standalone regression](../../../../../../../tools/tests/test_numpy_sum_origin_norm_model.py). No native OpenDP invocation, FFI conversion or Gaussian sampling was executed.
+
+**Deduplication:** Separate from the integer dtype [audit #123](https://github.com/opendp/opendp-audit/issues/123) and the now-closed [upstream clamp underflow issue #2953](https://github.com/opendp/opendp/issues/2953). See [cross-file investigation](../../../../../../../investigations/numpy-unsized-sum-origin-norm-underflow.md) and [audit #131](https://github.com/opendp/opendp-audit/issues/131).
+
 ## Next checks
 
-Execute OpenDP end-to-end for `make_np_sum` and `make_private_np_sum` with `T="i8"` and a fixed column count. Choose a supported output type or reject narrow integers explicitly, then add regression tests for output-domain membership and private composition.
+For the dtype mismatch, execute OpenDP end-to-end with `T="i8"` and a fixed column count, and choose a compatible sum output type. Independently, run a native OpenDP regression of the unsized nonzero-origin L2 counterexample, including domain membership, transformation map and Gaussian composition; replace the NumPy origin norm with a conservatively rounded, underflow-safe computation.
