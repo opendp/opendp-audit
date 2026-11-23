@@ -268,26 +268,56 @@ fn guarded_patch_accepts_exactly_scalable_mixed_magnitudes() -> Fallible<()> {
 }
 
 #[test]
-fn exact_consistency_shortcut_refuses_f64_rounding_alias() -> Fallible<()> {
-    // Naive f64 addition makes M+s==M, but as exact binary rationals
-    // the right-hand leaf sum differs from its parent by s. The shortcut
-    // must not accept a merely rounded, inconsistent hierarchy.
+fn exact_rational_fallback_projects_rounding_aliased_inconsistent_tree() -> Fallible<()> {
+    // Floating-point addition incorrectly treats this hierarchy as
+    // consistent, but exact rational reconciliation must project s.
+    // Independent normal equations: leaf correction coefficients
+    // [-8/21, 13/21, -1/21, -1/21] multiplied by s.
     let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
     assert_eq!(m + s, m);
     let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
     let observed = vec![m, m, 0.0, m, s, 0.0, 0.0];
-    assert!(post.eval(&observed).is_err());
+    let leaves = post.eval(&observed)?;
+    assert_eq!(leaves.len(), 4);
+    assert_eq!(leaves[0], m);
+    for (actual, coeff) in leaves[1..].iter().zip([13.0 / 21.0, -1.0 / 21.0, -1.0 / 21.0]) {
+        let expected = s * coeff;
+        assert!((actual - expected).abs() < s * 1e-13,
+            "actual={actual}, expected={expected}, leaves={leaves:?}");
+    }
     Ok(())
 }
 
 #[test]
-fn exact_consistency_shortcut_does_not_change_incomplete_tree_handling() -> Fallible<()> {
-    // The exact path is deliberately restricted to complete trees.
-    // Incomplete trees with loss under scaling must still fail closed.
+fn exact_rational_fallback_projects_incomplete_mixed_scale_tree() -> Fallible<()> {
+    // Six-node tree (missing last leaf), with the final input leaf
+    // perturbed by s. Normal equations: [-1/13,-1/13,5/13] * s
+    // relative to the consistent baseline [M, 0, 0].
     let m = 2.0_f64.powi(1023);
     let s = 1.0e-20_f64;
     let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
-    assert!(post.eval(&vec![m, m, 0.0, m, 0.0, s]).is_err());
+    let leaves = post.eval(&vec![m, m, 0.0, m, 0.0, s])?;
+    assert_eq!(leaves.len(), 3);
+    assert_eq!(leaves[0], m);
+    for (actual, coeff) in leaves[1..].iter().zip([-1.0 / 13.0, 5.0 / 13.0]) {
+        let expected = s * coeff;
+        assert!((actual - expected).abs() < s * 1e-13,
+            "actual={actual}, expected={expected}, leaves={leaves:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn exact_rational_fallback_preserves_consistent_incomplete_four_layer_tree() -> Fallible<()> {
+    // 14 observed nodes of a 15-node binary tree: only the final leaf
+    // is missing. A fully consistent small canceling subtree survives.
+    let m = 2.0_f64.powi(1023);
+    let s = 1.0e-20_f64;
+    let observed = vec![m, m, 0.0, m, 0.0, 0.0, 0.0,
+                        m, 0.0, 0.0, 0.0, s, -s, 0.0];
+    let post = make_consistent_b_ary_tree::<f64, f64>(2)?;
+    assert_eq!(post.eval(&observed)?,
+        vec![m, 0.0, 0.0, 0.0, s, -s, 0.0]);
     Ok(())
 }

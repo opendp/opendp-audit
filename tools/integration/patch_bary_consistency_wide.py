@@ -1,4 +1,4 @@
-"""Experimentally preserve complete exactly consistent trees before lossy f64 normalization.
+"""Experimentally reconcile lossy-scale trees with exact rational arithmetic.
 
 Applies only to a checkout of the pinned upstream OpenDP revision in CI.
 Never commits changes to opendp/opendp. Every substitution is fail-closed.
@@ -76,38 +76,115 @@ def main():
             let lossy = tree.iter().any(|v| (v / scale) * scale != *v);
             if lossy {
                 let leaf_start = num_nodes_from_num_layers(layers - 1, branching_factor);
-                let exactly_consistent = if zero_leaves == 0 {
-                    tree.iter()
-                        .copied()
-                        .map(num::BigRational::from_float)
-                        .collect::<Option<Vec<_>>>()
-                        .map_or(false, |nodes| {
-                            (0..leaf_start).all(|i| {
-                                let child_start = i * branching_factor + 1;
-                                let children = &nodes[child_start..child_start + branching_factor];
-                                nodes[i] == children.iter().cloned().sum::<num::BigRational>()
-                            })
-                        })
-                } else {
-                    false
-                };
-                if exactly_consistent {
-                    return tree[leaf_start..]
-                        .iter()
-                        .copied()
-                        .map(|v| {
-                            let out = TOA::round_cast(v)?;
-                            if !out.is_finite() {
-                                return fallible!(FailedFunction, "consistent leaf overflows output");
-                            }
-                            Ok(out)
-                        })
-                        .collect::<Fallible<Vec<TOA>>>();
+                // Experimental exact-rational fallback: perform weighted
+                // least-squares reconciliation without global rescaling.
+                // This is intentionally a slow, audit-only reference path.
+                fn ratio_to_f64(v: &num::BigRational) -> Option<f64> {
+                    use num::{Signed, Zero};
+                    if v.is_zero() { return Some(0.0); }
+                    fn high_bytes(bytes: &[u8]) -> (f64, i32) {
+                        let count = bytes.len().min(8);
+                        let mut head: u64 = 0;
+                        for byte in &bytes[..count] {
+                            head = (head << 8) | u64::from(*byte);
+                        }
+                        (head as f64, ((bytes.len() - count) * 8) as i32)
+                    }
+                    let (_, n_bytes) = v.numer().abs().to_bytes_be();
+                    let (_, d_bytes) = v.denom().abs().to_bytes_be();
+                    let (n_head, n_exp) = high_bytes(&n_bytes);
+                    let (d_head, d_exp) = high_bytes(&d_bytes);
+                    let mut value = if v.numer().is_negative() { -1.0 } else { 1.0 }
+                        * (n_head / d_head);
+                    let mut exp = n_exp - d_exp;
+                    while exp > 0 {
+                        let step = exp.min(512);
+                        value *= 2.0_f64.powi(step);
+                        if !value.is_finite() { return None; }
+                        exp -= step;
+                    }
+                    while exp < 0 {
+                        let step = (-exp).min(512);
+                        value /= 2.0_f64.powi(step);
+                        exp += step;
+                    }
+                    Some(value)
                 }
-                return fallible!(
-                    FailedFunction,
-                    "normalization would lose input precision"
-                );
+                use num::{One, Zero};
+                let mut exact_tree = tree
+                    .iter()
+                    .copied()
+                    .map(num::BigRational::from_float)
+                    .collect::<Option<Vec<_>>>()
+                    .ok_or_else(|| err!(FailedFunction, "cannot rationalize finite input"))?;
+                let mut exact_vars = vec![num::BigRational::one(); num_nodes];
+                for l in 0..layers {
+                    let zeros = zero_leaves / branching_factor.pow((layers - l - 1) as u32);
+                    let end = num_nodes_from_num_layers(l + 1, branching_factor);
+                    exact_vars[end - zeros..end].fill(num::BigRational::zero());
+                    exact_tree[end - zeros..end].fill(num::BigRational::zero());
+                }
+                // Exact bottom-up inverse-variance-weighted reconciliation.
+                for l in (0..layers - 1).rev() {
+                    let start = num_nodes_from_num_layers(l, branching_factor);
+                    for offset in 0..branching_factor.pow(l as u32) {
+                        let i = start + offset;
+                        if exact_vars[i].is_zero() { continue; }
+                        let children = i * branching_factor + 1
+                            ..i * branching_factor + 1 + branching_factor;
+                        let child_var: num::BigRational =
+                            exact_vars[children.clone()].iter().cloned().sum();
+                        let child_sum: num::BigRational =
+                            exact_tree[children].iter().cloned().sum();
+                        let old_var = exact_vars[i].clone();
+                        let total = &old_var + &child_var;
+                        if total.is_zero() {
+                            return fallible!(FailedFunction, "zero total rational variance");
+                        }
+                        let alpha = &child_var / &total;
+                        exact_vars[i] = old_var * &alpha;
+                        exact_tree[i] = &alpha * &exact_tree[i]
+                            + (num::BigRational::one() - alpha) * child_sum;
+                    }
+                }
+                // Exact top-down correction.
+                let mut exact_out = exact_tree.clone();
+                for l in 0..layers - 1 {
+                    let start = num_nodes_from_num_layers(l, branching_factor);
+                    for offset in 0..branching_factor.pow(l as u32) {
+                        let i = start + offset;
+                        let children = i * branching_factor + 1
+                            ..i * branching_factor + 1 + branching_factor;
+                        let child_sum: num::BigRational =
+                            exact_tree[children.clone()].iter().cloned().sum();
+                        let correction = &exact_out[i] - child_sum;
+                        if correction.is_zero() { continue; }
+                        let total_var: num::BigRational =
+                            exact_vars[children.clone()].iter().cloned().sum();
+                        if total_var.is_zero() {
+                            return fallible!(FailedFunction, "zero child rational variance");
+                        }
+                        for c in children {
+                            exact_out[c] += &correction * &exact_vars[c] / &total_var;
+                        }
+                    }
+                }
+                let leaf_start = num_nodes_from_num_layers(layers - 1, branching_factor);
+                let leaf_end = num_nodes_from_num_layers(layers, branching_factor) - zero_leaves;
+                return exact_out[leaf_start..leaf_end]
+                    .iter()
+                    .map(|v| {
+                        let value = ratio_to_f64(v).ok_or_else(|| {
+                            err!(FailedFunction, "rational projected leaf is not finite f64")
+                        })?;
+                        let out = TOA::round_cast(value)?;
+                        if !out.is_finite() {
+                            return fallible!(FailedFunction, "rational leaf overflows output");
+                        }
+                        Ok(out)
+                    })
+                    .collect::<Fallible<Vec<TOA>>>();
+
             }
             tree.iter_mut().for_each(|v| *v /= scale);
         }
@@ -167,7 +244,7 @@ def main():
     if source == original:
         raise RuntimeError("Patch made no changes")
     path.write_text(source)
-    print("Applied experimental exact-consistency shortcut and guarded f64 normalization")
+    print("Applied experimental exact-rational fallback and guarded f64 normalization")
 
 
 if __name__ == "__main__":
