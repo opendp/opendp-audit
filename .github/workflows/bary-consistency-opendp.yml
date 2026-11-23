@@ -1,0 +1,42 @@
+name: Verify b-ary consistency in pinned OpenDP
+
+on:
+  push:
+    paths:
+      - '.github/workflows/bary-consistency-opendp.yml'
+      - 'tools/integration/bary_consistency_open_dp.rs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout audit test
+        uses: actions/checkout@v4
+      - name: Checkout pinned upstream OpenDP
+        uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
+          path: opendp-upstream
+          persist-credentials: false
+      - name: Verify exact upstream SHA and install integration test
+        shell: bash
+        run: |
+          set -eu
+          test "$(git -C opendp-upstream rev-parse HEAD)" = "ef1a238634d6196b01a1a1e77d3d5ad2340e3094"
+          mkdir -p opendp-upstream/rust/tests
+          cp tools/integration/bary_consistency_open_dp.rs opendp-upstream/rust/tests/bary_consistency_open_dp.rs
+      - name: Configure Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Compile and test actual OpenDP public constructor
+        env:
+          CARGO_TERM_COLOR: always
+        run: |
+          cargo test --manifest-path opendp-upstream/rust/Cargo.toml \
+            --no-default-features --features contrib \
+            --test bary_consistency_open_dp -- --nocapture
