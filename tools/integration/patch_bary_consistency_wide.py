@@ -72,6 +72,11 @@ def main():
     )
     source = replace_exact(
         source,
+        "let correction = h_b[i] - tree[child_slice.clone()].iter().sum();",
+        "let correction: f64 = h_b[i] - tree[child_slice.clone()].iter().copied().sum::<f64>();",
+    )
+    source = replace_exact(
+        source,
         "if correction.is_zero() {",
         "if correction == 0.0 {",
     )
