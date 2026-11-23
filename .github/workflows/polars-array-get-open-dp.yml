@@ -1,0 +1,77 @@
+name: Verify Polars array.get out-of-bounds gate in pinned OpenDP
+
+on:
+  push:
+    paths:
+      - '.github/workflows/polars-array-get-open-dp.yml'
+      - 'tools/integration/polars_array_get_runtime.py'
+      - 'tools/integration/polars_array_get_open_dp.rs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  polars-runtime:
+    name: Native Polars 1.36.1 group-by error behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install 'polars==1.36.1'
+      - run: python tools/integration/polars_array_get_runtime.py
+
+  pinned-opendp:
+    name: Pinned OpenDP group-by constructor versus PR 3155
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_BUILD_JOBS: '2'
+      RUSTFLAGS: '-C debuginfo=0'
+      CARGO_TARGET_DIR: ${{ github.workspace }}/cargo-target
+    steps:
+      - name: Checkout audit regression
+        uses: actions/checkout@v4
+      - name: Checkout pinned upstream main
+        uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: ef1a238634d6196b01a1a1e77d3d5ad2340e3094
+          path: opendp-main
+          persist-credentials: false
+      - name: Checkout unmerged proposed fix PR head
+        uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: 63a32139856e16b7d415766e6a9becc25aa748e1
+          path: opendp-pr
+          persist-credentials: false
+      - name: Install matching tests in temporary checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C opendp-main rev-parse HEAD)" = 'ef1a238634d6196b01a1a1e77d3d5ad2340e3094'
+          test "$(git -C opendp-pr rev-parse HEAD)" = '63a32139856e16b7d415766e6a9becc25aa748e1'
+          for repo in opendp-main opendp-pr; do
+            mkdir -p "$repo/rust/tests"
+            cp tools/integration/polars_array_get_open_dp.rs "$repo/rust/tests/"
+          done
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify pinned upstream accepts potentially fallible aggregate
+        env:
+          EXPECT_REJECTION: '0'
+        run: |
+          cargo test --manifest-path opendp-main/rust/Cargo.toml \
+            --no-default-features --features contrib,polars \
+            --test polars_array_get_open_dp -- --nocapture
+      - name: Verify open PR 3155 rejects potentially fallible aggregate
+        env:
+          EXPECT_REJECTION: '1'
+        run: |
+          cargo test --manifest-path opendp-pr/rust/Cargo.toml \
+            --no-default-features --features contrib,polars \
+            --test polars_array_get_open_dp -- --nocapture
