@@ -13,6 +13,8 @@ updated: 2026-11-23
 - **Assumptions:** Valid per-measurement input plans satisfy their `ExprDomain`; `MakeNoise` fulfills its own sampling/privacy-map contract for non-NaN vectors; chunk-level calls receive independent randomness and no data-dependent failures. We do not claim that raw public plugin calls on nullable data are certified by the constructor.
 - **Pinned sources:** [Noise expression](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/make_private_expr/expr_noise/mod.rs), [measure-to-noise dispatch](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/noise/distribution/mod.rs), [float noise constructor](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/measurements/noise/nature/float/mod.rs), [Polars metric-space preconditions](https://github.com/opendp/opendp/blob/ef1a238634d6196b01a1a1e77d3d5ad2340e3094/rust/src/domains/polars/expr/mod.rs).
 
+- **Additional boundary reviewed at `a010591f55b1713c926f8e355091471634480307`:** the FFI `noise` shim's *actual executable shared library* must match the noise law assumed by `map_function`. In a locally constructed or explicitly trusted plan, the generic plugin matcher does not establish canonical library identity, and `apply_plugin` preserves the plugin's original library path. See [cross-file investigation](../../../../../../investigations/polars-ffi-plugin-library-identity.md).
+
 ## Symbol coverage
 
 | Symbol | Property | Status | Reviewed commit | Evidence / findings |
@@ -21,6 +23,8 @@ updated: 2026-11-23
 | `measurements::make_private_expr::expr_noise::map_function` | privacy/distribution-map-dispatch-parity | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Source correspondence](#distribution-and-privacy-map-dispatch) |
 | `measurements::make_private_expr::expr_noise::noise_impl` | correctness/chunkwise-noise-dispatch | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Chunk semantics](#chunkwise-noise-and-dtype) |
 | `measurements::make_private_expr::expr_noise::noise_plugin_type_udf` | correctness/numeric-dtype-validation | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Dtype restrictions](#chunkwise-noise-and-dtype) |
+
+| `measurements::make_private_expr::expr_noise::make_expr_noise` | privacy/ffi-plugin-implementation-binding | Partial | `a010591f55b1713c926f8e355091471634480307` | [Executable plugin identity](#ffi-plugin-implementation-identity); [conditional defect #159](https://github.com/opendp/opendp-audit/issues/159) |
 
 ## Analysis
 
@@ -41,6 +45,12 @@ Polars nullable payloads require separate attention: `noise_impl` reads `chunk.v
 Unlike the explicit non-null check, `make_expr_noise` does not check `middle_domain.column.atom_domain::<f32/f64>()?.nan()`. The constructor generates its privacy map from a fresh `VectorDomain::new(AtomDomain::<T>::new_non_nan())`. The actual `ExprDomain` retains its possibly NaN-permitting atom-domain descriptor; its `MetricSpace for LpDistance` currently checks only nullability and numeric dtype. Therefore accepting a floating expression domain under `L1Distance` or `L2Distance` does not by itself imply that the noise-map vector's non-NaN precondition holds for all members of the expression domain.
 
 The [domain report](../../../../../../source/rust/src/domains/polars/expr/mod.rs.md) and [cross-file investigation](../../../../../../investigations/polars-noise-lp-nan-domain.md) identify this as a **confirmed metric-space validation discrepancy**. Because the analyzed aggregation primitives can impose stricter constraints on actual computed values, no end-to-end DP counterexample or confirmed distributional undercount is claimed.
+
+### FFI plugin implementation identity
+
+The distribution/map parity established above is valid **if the executable noise plugin is OpenDP's implementation**. The FFI `make_expr_noise` path recognizes the supplied `noise` shim through `match_plugin`, which requires only a shared-library path containing `"opendp"` and a matching shim symbol. Its function builds an executable noise expression via `apply_plugin`, which keeps the **original** `FfiPlugin.lib` field while substituting the `NoisePlugin` symbol and kwargs. Therefore a locally authored/explicitly trusted native plugin whose path happens to contain the token `opendp` could be accounted using OpenDP's noise privacy map but point to unrelated executable code.
+
+**Scope limitation:** Current untrusted serialized-plan preflight already validates and rebinds allowed shim plugins to the canonical trusted library before deserialization. The concern is **not** an established untrusted-plan bypass. Its impact requires that a third-party native library with compatible plugin exports be available and invoked under the locally trusted-plan API. No real shared-library execution or private-data release was performed; the [standalone source-equivalent test](../../../../../../tools/tests/test_polars_ffi_plugin_identity_model.py) and [investigation](../../../../../../investigations/polars-ffi-plugin-library-identity.md) establish the source-level path mismatch only. See [candidate privacy issue #159](https://github.com/opendp/opendp-audit/issues/159). The earlier typed distribution checks remain valid when the plugin identity is trusted.
 
 ## Next checks
 
