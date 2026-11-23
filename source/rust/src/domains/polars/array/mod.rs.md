@@ -30,7 +30,7 @@ updated: 2026-11-23
 
 **Limitations:** The generic `SeriesDomain::member` currently returns `NotImplemented` for Array dtype, so the finding is **not** claimed as a working SeriesDomain bypass. No native execution or DP privacy attack was performed.
 
-**Related:** [Audit defect #138](https://github.com/opendp/opendp-audit/issues/138); sibling enum membership defect [#137](https://github.com/opendp/opendp-audit/issues/137); different nested NaN metric-space issue [#57](https://github.com/opendp/opendp-audit/issues/57).
+**Related:** [Audit defect #138](https://github.com/opendp/opendp-audit/issues/138) is closed for a matching [open/draft upstream fix PR #3242](https://github.com/opendp/opendp/pull/3242), which adds `matches_dtype`, nullity and `check_values` validation; the defect remains on reviewed upstream `main` until merged. Sibling enum membership defect [#137](https://github.com/opendp/opendp-audit/issues/137) is not fixed by that PR; separate nested NaN metric-space issue [#57](https://github.com/opendp/opendp-audit/issues/57).
 
 ## Next checks
 
