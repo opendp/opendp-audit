@@ -58,15 +58,37 @@ Under the current pure-DP `then_noisy_max` with `scale=2`, the nonmonotonic map 
 
 **Executed:** Standalone Python/NumPy 2.3.5 reproduced the exact source expression and four-unit score change, and Python mathematics evaluated the conditional selection ratio; the assertions also live in [regression tests](../tools/tests/test_aim_score_rounding_model.py). This does **not** execute the native OpenDP constructors, C FFI, MBI MarkovRandomField, or full AIM flow. No timing side channel or sampler failure is required by the hypothetical counterexample.
 
+## Additional native verification: large public model, ordinary noise penalty
+
+[Native integration test](../tools/integration/mbi_public_model_score_native.py) and [successful CI run](https://github.com/opendp/opendp-audit/actions/runs/45254507499) verify a *separate arithmetic witness for the same score-stability defect*. The run used the published OpenDP `0.16.0-nightly.20261122.1` wheel, `mbi==2.0.0`, NumPy `2.3.5`, and JAX binary64.
+
+Build an **actual `mbi.MarkovRandomField`** over three binary attributes `A,B,C`, with public total `T=float(2**55+16)`. Its finite log-potentials are `0` at state `000` and `-1000` on all other states. The stored marginals vector is empty, so the **MBI variable-elimination oracle** computes public projections from the potentials. They are mutually consistent, concentrated in the zero cell, and within `~100` of `T` due to JAX normalization rounding. No inconsistent injected marginals are used.
+
+Take two neighboring private inputs: `D0` with four `(A=0,B=0,C=0)` records and `D1` adding one `(A=0,B=1,C=0)` record. Their `A`, `B` one-way count tables change by entrywise L1 distance 1. Set both expectations to 2.0: the score penalty is just `P=2*2=4`, achievable with `MaxDivergence` `d_measure=0.5` and sensitivity 1 (no extreme privacy-budget setting). The *actual native OpenDP* scorer yields:
+
+```text
+                     D0            D1        D1-D0
+A score              S             S-16       -16
+B score              S             S            0
+Declared LInf sensitivity: 1
+Actual LInf sensitivity: 16
+```
+
+Here `S` is the roughly `3.602879701896408e16` public-model discrepancy after JAX normalization, not a manually assigned score.
+
+The native `_make_aim_scores` transformation accepts both input dictionaries, returns those scores, and `map(d_in)` returns 1. The native scorer composed with `then_noisy_max(scale=4)` reports **epsilon=0.5**, whereas the worst-case two-candidate output event has exact permute-and-flip log likelihood ratio **4.0** based on these realized score vectors. Furthermore, the library's own **`_make_aim_select`**, called with `d_out=d_measure=0.5`, constructed successfully, `map(d_in)=0.5`, and its actual randomized selection produced a valid clique. The internal scorer/selector privacy-map counterexample is therefore **native verified**.
+
+**Limit:** This test directly invokes the internal selection constructor; the full `make_contingency_table` pipeline, including estimation/reconstruction from previous DP marginals and its public-model reachability constraints, was not executed. The large but finite public model total is the remaining high-level question. The original *large expected-noise penalty* witness above is independently valid under its source-equivalent formula, but only the *large model with ordinary penalty* witness has been fully executed through native OpenDP/MBI.
+
 ## Findings
 
-**Source-level reproduced score-stability counterexample with conditional downstream privacy-accounting impact.** Filed [audit #125](https://github.com/opendp/opendp-audit/issues/125), associated with [task #124](https://github.com/opendp/opendp-audit/issues/124). This is distinct from [upstream #2789](https://github.com/opendp/opendp/issues/2789), which concerns numerical precision of *privacy budget comparisons*, and from earlier AIM PRs #2905/#2906 and [#3108](https://github.com/opendp/opendp/pull/3108), which do not bound score-subtraction rounding.
+**Native verified internal scorer-to-selector privacy-map counterexample, plus a separate source-level large-penalty witness.** Filed [audit #125](https://github.com/opendp/opendp-audit/issues/125), associated with [task #124](https://github.com/opendp/opendp-audit/issues/124). This is distinct from [upstream #2789](https://github.com/opendp/opendp/issues/2789), which concerns numerical precision of *privacy budget comparisons*, and from earlier AIM PRs #2905/#2906 and [#3108](https://github.com/opendp/opendp/pull/3108), which do not bound score-subtraction rounding.
 
-The exposed issue is not a demonstrated privacy breach in a default high-level AIM run. It requires tiny positive selection/measurement budget settings and completion of the native construction proof obligation.
+The internal counterexample with an ordinary penalty of 4 no longer requires tiny positive budget settings; it does require a large public synthetic-model total. End-to-end reachability through the default high-level AIM model-fitting path remains unverified.
 
 ## Unresolved questions
 
-1. Native end-to-end regression: instantiate the stated public MBI model, construct source `_make_aim_scores` and `_make_aim_select` at the pinned revision, and check the map and score outputs.
-2. Establish that all required AIM nested budget searches and model compatibility constraints permit the chosen public `measure_split`, with the exact penalty retained.
+1. Validate complete high-level `make_contingency_table` model-reuse/fitting constraints with a publicly constructible large MBI model; the internal scorer and `_make_aim_select` have been verified in a published native wheel.
+2. For the separate original huge-penalty witness, establish that all required AIM nested budget searches permit the very small public `measure_split`.
 3. Examine conservative `float64` error bounds for subtraction, overflow/underflow, and `model.project` values, then select an implementable mitigation that does not understate sensitivity.
 4. Review final upstream PRs for a fix before resolving #125.
