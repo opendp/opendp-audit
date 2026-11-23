@@ -20,6 +20,7 @@ updated: 2026-11-23
 | --- | --- | --- | --- | --- |
 | `make_consistent_b_ary_tree` | correctness/f32-intermediate-overflow | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Finite input, NaN leaves](#finite-input-nan-leaves) |
 | `make_consistent_b_ary_tree` | correctness/incomplete-tree-padding | Partial | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Padding and output length](#padding-and-output-length) |
+| `make_consistent_b_ary_tree` | correctness/f64-intermediate-overflow | Audited | `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` | [Native f64 maximum reproduction](#native-f64-maximum-reproduction) |
 
 ## Analysis
 
@@ -51,6 +52,22 @@ The code uses inverses of summed child variance, and a top-down correction distr
 
 **Conclusion:** No additional padding or shape defect established in the checked controls; **Partial** because the full input-shape and numeric boundary space was not verified.
 
+### Native f64 maximum reproduction
+
+The same source-level failure occurs at the **largest finite binary64 value**, independently of any integer-to-`f32` conversion. Calling `make_consistent_b_ary_tree::<f64, f64>(2)` on the finite three-node tree `[f64::MAX; 3]` produces `Ok([NaN, NaN])`. The bottom-up child sum `f64::MAX + f64::MAX` is infinity; the top-down correction `+∞ - +∞` is NaN. In exact arithmetic, the reconciled leaves are `(2/3)f64::MAX`, each finite and representable.
+
+This precise witness is **natively reproduced in the unchanged OpenDP library** by [`tools/integration/bary_consistency_open_dp.rs`](https://github.com/opendp/opendp-audit/blob/main/tools/integration/bary_consistency_open_dp.rs). [GitHub Actions run #45104456779](https://github.com/opendp/opendp-audit/actions/runs/45104456779) compiled upstream `ef1a238634d6196b01a1a1e77d3d5ad2340e3094` and passed **4/4 baseline tests** (including the new `f64::MAX` NaN assertion). This is the **same intermediate-overflow defect as [issue #33](https://github.com/opendp/opendp-audit/issues/33)**, not a duplicate issue.
+
+### Experimental selective normalization at f64 limits
+
+The [current CI-only patch script](https://github.com/opendp/opendp-audit/blob/main/tools/integration/patch_bary_consistency_wide.py) extends the earlier direct-`f64` approach with **selective magnitude normalization**. After casting all source atoms into `f64` and checking finiteness, it finds the maximum absolute input `M`. If `M > f64::MAX / (4 × num_nodes)`, it divides the tree's values by `M` before the inverse-variance bottom-up and top-down scans, and rescales the reconciled leaves by `M` at the end. Otherwise, it uses scale 1 to avoid changing ordinary-scale calculations. Final `TOA` casts and nonfinite-output rejection remain in place.
+
+The normalization is motivated by the linearity of least-squares consistency projection in the observed node values; its correctness for every combination of parameters is **not proven** here. A numerical reduction uses `f64` and is thus subject to finite-precision cancellation and loss of subnormal contributions when large and small counts coexist.
+
+**Executed tests:** [GitHub Actions run #45104281161](https://github.com/opendp/opendp-audit/actions/runs/45104281161) passed the original three baseline tests and **11/11 patched-library tests**. The patched tests add finite-output checks for `±f64::MAX` in three-node trees, `f64::MAX` in a seven-node tree whose exact leaves are `(3/7)f64::MAX`, and zero-sum cancellation of opposite extreme leaves. They also compare **200 deterministic complete-tree inputs** against an independent four-leaf normal-equation least-squares solver with absolute tolerance `1e-9`. [Run #45104456779](https://github.com/opendp/opendp-audit/actions/runs/45104456779) subsequently passed **4/4 baseline** and **11/11 patched** tests after adding the second native NaN witness. The code is stored in [the audit repository](https://github.com/opendp/opendp-audit/blob/main/tools/integration/bary_consistency_wide_open_dp.rs), and the patch is applied only to the temporary pinned checkout within CI. The upstream repository is unchanged.
+
+**Remaining gaps:** This is a **limited experimental correction**, not a production patch or privacy proof. The added `f64: RoundCast<TIA>` bound can change generic API compatibility, the heuristic scaling threshold is not a formally verified bound for all tree shapes, and exact consistency after rounding, extreme dynamic range, large tree sizes, and all supported `TIA/TOA` combinations remain unverified. [Issue #33](https://github.com/opendp/opendp-audit/issues/33) stays open.
+
 ### Experimental widened-intermediate correction
 
 The [CI-only patch script](https://github.com/opendp/opendp-audit/blob/main/tools/integration/patch_bary_consistency_wide.py) applies an experimental correction to a **temporary checkout of pinned OpenDP**: cast input atoms directly into `f64` using `f64::round_cast`, reconcile the tree and variances in `f64`, then convert the resulting leaves to the requested `TOA` and reject nonfinite outputs. It adds the bound `f64: RoundCast<TIA>` to the experimental public constructor. This is **not a production patch or a change to opendp/opendp**. The original first-stage version cast `TIA → TOA → f64`; it addressed the `i128::MAX → f32` intermediate overflow but still failed where the **initial** `u128::MAX → f32` cast produces infinity.
@@ -75,4 +92,4 @@ The first experiment's `f64` type-inference error was corrected before [run #451
 
 - Add and test a correction to the production postprocessor that either avoids intermediate overflow or returns an explicit error for nonfinite results; update the native integration regression to assert finite leaves where mathematically representable.
 - Test equivalent `f64` numeric boundaries, incomplete trees with absent children, and exceptional conversions, ideally with property-based checks of reconciled parent/child consistency.
-- Determine whether the successful direct `TIA → f64` experimental approach can preserve the public generic input-type contract; investigate cancellation, large tree height and branching factor, exactness after output rounding, and all supported `TIA/TOA` combinations before any upstream change.
+- Review selective normalization as a prospective production fix: validate its conservative threshold, input-type generic bound, adversarial dynamic range and cancellation, and the accuracy/consistency of outputs after rounding on larger and incomplete trees. Run a broader native property-test matrix before any upstream change.
