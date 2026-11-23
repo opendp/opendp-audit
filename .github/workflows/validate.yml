@@ -17,4 +17,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -s tools/tests -v
+      - name: Check geometric interval width arithmetic in native Rust
+        run: |
+          rustc --edition=2021 --test tools/tests/geometric_trial_width.rs -o "$RUNNER_TEMP/geometric_trial_width"
+          "$RUNNER_TEMP/geometric_trial_width"
       - run: python tools/validate.py
