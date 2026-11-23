@@ -35,6 +35,14 @@ The expected **real-arithmetic** variance-weighted parent is `(2/3)M + (1/3)(2M)
 
 **Conclusion:** A high-confidence source-supported numerical utility/correctness defect, not a DP violation. The `Audited` scope is only this explicit `f32` overflow path and the associated arithmetic model, not full postprocessor correctness.
 
+### Native Rust arithmetic regression
+
+A second, independent regression was compiled with native `rustc --edition=2021 --test` in the audit repository's CI. The [std-only reproducer](https://github.com/opendp/opendp-audit/blob/main/tools/tests/bary_consistency_float_overflow.rs) copies the **three-node bottom-up weighted average and top-down correction arithmetic** from the pinned implementation, but uses primitive `f32` operations directly rather than importing OpenDP.
+
+The three Rust tests check that `i128::MAX as f32` is finite but the sum of two such values overflows to infinity and produces NaN final leaves; that the mathematically expected `(2/3)M` leaf value fits within `f32`; and that small consistent counts `[3, 1, 2]` stay unchanged. All three tests passed in [GitHub Actions run #45100869596](https://github.com/opendp/opendp-audit/actions/runs/45100869596), together with the audit repository's existing tests and report validator. The reproducer was introduced in [commit `d8fe885`](https://github.com/opendp/opendp-audit/commit/d8fe885437b40bbeba7157642634bf7f0069d3c4).
+
+This **confirms the native Rust primitive arithmetic path**, independently of the prior Python model, but is **not a compiled OpenDP integration test**. The upstream `make_consistent_b_ary_tree` invocation, `RoundCast` dispatch, and FFI conversions remain unexecuted, so the issue's verification status remains **Candidate**.
+
 ### Padding and output length
 
 The function validates `branching_factor >= 2` and rejects an empty vector at invocation. It computes the minimum complete-tree node count covering `arg.len()` with checked node arithmetic, appends zero-valued phantom nodes, and marks missing last-layer and empty-subtree variances as zero. The final slice excludes phantom leaves. The model's basic controls include a one-node tree, a two-node partially missing tree, and two incomplete three-layer trees; these returned finite leaves with the expected lengths.
