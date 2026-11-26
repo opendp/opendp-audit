@@ -25,8 +25,8 @@ def query_on(frame):
 
 def private_release(n):
     data = pl.LazyFrame({
-        "k": pl.Series("k", [0], dtype=pl.Int32),
-        "n": pl.Series("n", [n], dtype=pl.Int64),
+        "k": pl.Series("k", [] if n is None else [0], dtype=pl.Int32),
+        "n": pl.Series("n", [] if n is None else [n], dtype=pl.Int64),
     })
     context = dp.Context.compositor(
         data=data,
@@ -47,7 +47,10 @@ def private_release(n):
 if __name__ == "__main__":
     dp.enable_features("contrib")
     print("Polars", pl.__version__, flush=True)
-    for n in (1, -1):
-        data = pl.LazyFrame({"k": [0], "n": [n]})
+    for n in (1, -1, None):
+        data = pl.LazyFrame({
+            "k": pl.Series("k", [] if n is None else [0], dtype=pl.Int32),
+            "n": pl.Series("n", [] if n is None else [n], dtype=pl.Int64),
+        })
         report(f"raw n={n}", lambda n=n, data=data: query_on(data).collect())
         report(f"private n={n}", lambda n=n: private_release(n))
