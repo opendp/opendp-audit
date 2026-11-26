@@ -1,0 +1,42 @@
+name: Probe NaN accuracy calibration termination
+
+on:
+  push:
+    paths:
+      - '.github/workflows/accuracy-nan-calibration-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  accuracy-nan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install 'opendp==0.16.0a20261122001'
+      - name: Establish normal finite calibration
+        run: |
+          python - <<'PY'
+          import opendp.prelude as dp
+          print("laplace", dp.accuracy_to_discrete_laplacian_scale(1.0, 0.5))
+          print("gaussian", dp.accuracy_to_discrete_gaussian_scale(1.0, 0.5))
+          PY
+      - name: Detect nontermination with NaN significance level
+        shell: bash
+        run: |
+          for function in accuracy_to_discrete_laplacian_scale accuracy_to_discrete_gaussian_scale; do
+            set +e
+            timeout 4s python -u -c "import opendp.prelude as dp; print('calling $function with alpha NaN', flush=True); print(getattr(dp, '$function')(1.0, float('nan')), flush=True)"
+            status=$?
+            set -e
+            echo "$function exit status: $status"
+            if [ "$status" -ne 124 ]; then
+              echo "Expected timeout indicating nontermination; received status $status"
+              exit 1
+            fi
+          done
