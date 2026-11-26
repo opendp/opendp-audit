@@ -1,36 +1,20 @@
-"""Probe a private repetition count in a stable grouped plan before DP noise.
+"""Native source-equivalent privacy counterexample for OpenDP's repeat preflight.
 
-Pinned wheel is an older build than upstream main. This is a diagnostic
-integration probe: it records whether the constructor accepts the plan and
-whether execution status differs for neighboring inputs.
+The two one-row inputs differ by one substitution under ChangeOneDistance.
+The same epsilon=1 query releases on n=1 but raises before noise on n=-1.
 """
 import polars as pl
 import opendp.prelude as dp
 
 
-def report(label, call):
-    try:
-        result = call()
-        print(label, "OK", repr(result), flush=True)
-        return True
-    except BaseException as exc:
-        print(label, "ERROR", type(exc).__name__, str(exc)[:800], flush=True)
-        return False
-
-
-def query_on(frame):
-    expr = pl.repeat(1, n=pl.col("n").first()).first().alias("v")
-    return frame.group_by("k").agg(expr)
-
-
-def private_release(n, *, bounded=False):
+def release(n: int):
     data = pl.LazyFrame({
-        "k": pl.Series("k", [] if n is None else [0], dtype=pl.Int32),
-        "n": pl.Series("n", [] if n is None else [n], dtype=pl.Int64),
+        "k": pl.Series("k", [0], dtype=pl.Int32),
+        "n": pl.Series("n", [n], dtype=pl.Int64),
     })
     context = dp.Context.compositor(
         data=data,
-        privacy_unit=dp.unit_of(changes=1) if bounded else dp.unit_of(contributions=1),
+        privacy_unit=dp.unit_of(changes=1),
         privacy_loss=dp.loss_of(epsilon=1.0),
         margins=[dp.polars.Margin(max_length=1)],
     )
@@ -46,13 +30,12 @@ def private_release(n, *, bounded=False):
 
 if __name__ == "__main__":
     dp.enable_features("contrib")
-    print("Polars", pl.__version__, flush=True)
-    for n in (1, -1, None):
-        data = pl.LazyFrame({
-            "k": pl.Series("k", [] if n is None else [0], dtype=pl.Int32),
-            "n": pl.Series("n", [] if n is None else [n], dtype=pl.Int64),
-        })
-        report(f"raw n={n}", lambda n=n, data=data: query_on(data).collect())
-        report(f"private insert-delete n={n}", lambda n=n: private_release(n))
-        if n is not None:
-            report(f"private change-one n={n}", lambda n=n: private_release(n, bounded=True))
+    assert pl.__version__ == "1.36.1"
+    print("n=1: noisy private release succeeds:", release(1), flush=True)
+    try:
+        release(-1)
+    except pl.exceptions.ComputeError as err:
+        assert "could not parse value '-1' as a size" in str(err)
+        print("n=-1: deterministic pre-noise ComputeError:", err, flush=True)
+    else:
+        raise AssertionError("expected a data-dependent pre-noise exception")
