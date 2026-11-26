@@ -23,14 +23,14 @@ def query_on(frame):
     return frame.group_by("k").agg(expr)
 
 
-def private_release(n):
+def private_release(n, *, bounded=False):
     data = pl.LazyFrame({
         "k": pl.Series("k", [] if n is None else [0], dtype=pl.Int32),
         "n": pl.Series("n", [] if n is None else [n], dtype=pl.Int64),
     })
     context = dp.Context.compositor(
         data=data,
-        privacy_unit=dp.unit_of(contributions=1),
+        privacy_unit=dp.unit_of(changes=1) if bounded else dp.unit_of(contributions=1),
         privacy_loss=dp.loss_of(epsilon=1.0),
         margins=[dp.polars.Margin(max_length=1)],
     )
@@ -53,4 +53,6 @@ if __name__ == "__main__":
             "n": pl.Series("n", [] if n is None else [n], dtype=pl.Int64),
         })
         report(f"raw n={n}", lambda n=n, data=data: query_on(data).collect())
-        report(f"private n={n}", lambda n=n: private_release(n))
+        report(f"private insert-delete n={n}", lambda n=n: private_release(n))
+        if n is not None:
+            report(f"private change-one n={n}", lambda n=n: private_release(n, bounded=True))
