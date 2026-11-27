@@ -44,3 +44,11 @@ jobs:
         run: |
           cd python
           python -m pytest -v test/extras/test_gaussian_pca.py test/extras/test_pca_numpy.py
+      - name: Check out weighted regression candidate
+        run: |
+          git fetch --no-tags --depth=1 origin 97168955d13c0ffede279a6acbf31de10e8d5643
+          git reset --hard FETCH_HEAD
+      - name: Test weighted regression candidate
+        run: |
+          cd python
+          python -m pytest -v test/extras/test_linear_regression_adassp.py
