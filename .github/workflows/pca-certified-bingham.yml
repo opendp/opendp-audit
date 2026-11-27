@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   native:
-    name: Native (same-runner Dashu log comparison)
+    name: Native (Karney versus ratio-of-uniforms)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -31,15 +31,36 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: Test native sampler
+      - name: Test ratio-of-uniforms sampler
         run: |
           cargo fmt --manifest-path rust/Cargo.toml --all
           cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::bingham
+      - name: Measure lazy standard normal generation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("rust/src/traits/samplers/bingham/mod.rs")
+          p.write_text(p.read_text() + """
+          #[cfg(test)]
+          #[test]
+          #[ignore]
+          fn benchmark_lazy_normal() -> Fallible<()> {
+              let n = 10000;
+              let start = std::time::Instant::now();
+              for _ in 0..n {
+                  std::hint::black_box(normal()?);
+              }
+              println!("BENCH lazy-normal n={} mean_us={:.3}", n, start.elapsed().as_secs_f64() * 1e6 / n as f64);
+              Ok(())
+          }
+          """)
+          PY
+          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib benchmark_lazy_normal -- --ignored --nocapture
       - name: Build generated Python bindings
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
       - name: Install Python test dependencies
         run: python -m pip install -e 'python[scikit-learn]' pytest
-      - name: Benchmark screened sampler
+      - name: Benchmark ratio-of-uniforms sampler
         shell: bash
         run: |
           lscpu | grep -E 'Model name|CPU\(s\):' || true
@@ -95,43 +116,39 @@ jobs:
         run: |
           cd python
           python -m pytest -v test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py
-      - name: Benchmark direct evaluation without H (experimental variant)
+      - name: Check out Karney candidate
         run: |
-          git restore --source=HEAD -- rust/src/traits/samplers/bingham/mod.rs
-          python - <<'PY'
-          from pathlib import Path
-          path = Path("rust/src/traits/samplers/bingham/mod.rs")
-          source = path.read_text()
-          start = source.index("        let certified = approximate_diagonals")
-          end = source.index("\n    }\n", start)
-          source = source[:start] + """        let certified = (|| {
-                      let p = ApproxMatrix::from_exact(&p)?;
-                      let b = ApproxMatrix::from_exact(&factor)?;
-                      b.transpose().multiply(&p.multiply(&b)?)?.diagonal_bounds()
-                  })().filter(|g| g.iter().all(|r| r.lo > RBig::ZERO));
-                  let g_diagonal = certified.unwrap_or_else(|| {
-                      let (p, p_den) = integer_matrix(&p);
-                      let (b, b_den) = integer_matrix(&factor);
-                      let bt = transpose(&b);
-                      let h_den = &b_den * &b_den;
-                      let g = rationalize(matmul(&bt, &matmul(&p, &b)), &(&p_den * &h_den));
-                      diagonal_bounds(&g)
-                  });
-                  Self::from_bounds(p, factor, g_diagonal, vec![])""" + source[end:]
-          start = source.index("                            let squared: Vec<_>")
-          end = source.index("                            match decision", start)
-          source = source[:start] + """                            let z2 = norm_squared(&z_bounds);
-                                      let projected = v.insert(project());
-                                      let decision = self.decide(&quadratic(&self.precision, projected), &norm_squared(projected), &z2, &log_u, bits)?;
-          """ + source[end:]
-          path.write_text(source)
-          PY
-      - name: Build and test direct sampler
+          git fetch --no-tags --depth=1 origin 891e73c9bccfcdb1206da76427a138f0be78af93
+          git reset --hard FETCH_HEAD
+      - name: Test Karney sampler
         run: |
           cargo fmt --manifest-path rust/Cargo.toml --all
+          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::karney
           cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::bingham
-          cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
-      - name: Benchmark direct sampler
+      - name: Measure lazy standard normal generation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("rust/src/traits/samplers/bingham/mod.rs")
+          p.write_text(p.read_text() + """
+          #[cfg(test)]
+          #[test]
+          #[ignore]
+          fn benchmark_lazy_normal() -> Fallible<()> {
+              let n = 10000;
+              let start = std::time::Instant::now();
+              for _ in 0..n {
+                  std::hint::black_box(normal()?);
+              }
+              println!("BENCH lazy-normal n={} mean_us={:.3}", n, start.elapsed().as_secs_f64() * 1e6 / n as f64);
+              Ok(())
+          }
+          """)
+          PY
+          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib benchmark_lazy_normal -- --ignored --nocapture
+      - name: Build Karney Python bindings
+        run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
+      - name: Benchmark Karney sampler
         shell: bash
         run: |
           for d in 2 8 24 64 128 256 512 1024; do
@@ -145,7 +162,7 @@ jobs:
               fi
             done
           done
-      - name: Test direct PCA integration
+      - name: Test Karney PCA integration
         run: |
           cd python
           python -m pytest -v test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py
