@@ -80,7 +80,7 @@ jobs:
           git reset --hard FETCH_HEAD
       - name: Check out SSCP-only decomposition2
         run: |
-          git fetch --no-tags --depth=1 origin 3ebd08d2404be2a0b8718696732d7deba1638341
+          git fetch --no-tags --depth=1 origin bbf654460387f28c16f25c92f275aec079ab125e
           git reset --hard FETCH_HEAD
       - name: Test SSCP-only decomposition2
         run: |
@@ -88,7 +88,7 @@ jobs:
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_pca_numpy.py test/extras/test_count_numpy.py
       - name: Check out Bingham integration in decomposition2
         run: |
-          git fetch --no-tags --depth=1 origin 93dc219177bccc78f833cbd09a00f48c4fbb71f8
+          git fetch --no-tags --depth=1 origin 65c658d332c741eb7e490f91334a5bc6f0081c82
           git reset --hard FETCH_HEAD
       - name: Test Bingham integration in decomposition2
         run: |
@@ -96,7 +96,7 @@ jobs:
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out scale-based Bingham
         run: |
-          git fetch --no-tags --depth=1 origin 8c5d6bb4dad64da5eca16f9822b39b820d386ac4
+          git fetch --no-tags --depth=1 origin 7ded9a939a859bade7dae0c22e437cde9c86638f
           git reset --hard FETCH_HEAD
       - name: Test scale-based Bingham
         run: |
@@ -104,7 +104,7 @@ jobs:
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out unknown-size Bingham
         run: |
-          git fetch --no-tags --depth=1 origin 2635b10f08185e1ea62603367b33e23846a02ff9
+          git fetch --no-tags --depth=1 origin 8f40b6041ac147022fc5bad9b78854091c92a26c
           git reset --hard FETCH_HEAD
       - name: Test unknown-size Bingham
         run: |
@@ -112,7 +112,7 @@ jobs:
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out certified Bingham
         run: |
-          git fetch --no-tags --depth=1 origin c88a6bb990113688d10dadccd3e585d6b05e4944
+          git fetch --no-tags --depth=1 origin 95363f163665a8eaebea56dbe7d26ef77ae89bdf
           git reset --hard FETCH_HEAD
       - name: Rebuild for certified Bingham
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
