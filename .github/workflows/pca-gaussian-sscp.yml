@@ -1,0 +1,38 @@
+name: Test Gaussian SSCP PCA and regression
+
+on:
+  push:
+    paths:
+      - '.github/workflows/pca-gaussian-sscp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENDP_TEST_RELEASE: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: 66737e072d56ae2a09e722cc53f45615cd5ad34d
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Python bindings
+        run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
+      - name: Install dependencies
+        run: python -m pip install -e 'python[scikit-learn]' pytest
+      - name: Run PCA, SSCP and linear regression tests
+        run: |
+          cd python
+          python -m pytest -v test/extras/test_gaussian_pca.py test/extras/test_pca_numpy.py test/extras/test_xTx_numpy.py test/extras/test_linear_regression_adassp.py
