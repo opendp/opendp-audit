@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: a747a20b9cd6157951058a298c70807ebb75d765
+          ref: 1b67d8e584ea7031d02c0ffd1b933fdd886d8e70
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
