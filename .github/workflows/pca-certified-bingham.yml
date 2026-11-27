@@ -1,0 +1,40 @@
+name: Test certified Bingham sampler against pinned OpenDP branch
+
+on:
+  push:
+    paths:
+      - '.github/workflows/pca-certified-bingham.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: a747a20b9cd6157951058a298c70807ebb75d765
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Format and test native sampler
+        run: |
+          cargo fmt --manifest-path rust/Cargo.toml --all
+          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::bingham
+      - name: Build generated Python bindings
+        run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
+      - name: Test eigenvector and PCA integration
+        env:
+          OPENDP_TEST_RELEASE: '1'
+        run: |
+          python -m pip install -e 'python[scikit-learn]' pytest
+          cd python
+          python -m pytest -v test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py -k 'private_eigenvector or joint_eigenvector or matrix_eigendecomposition or selects_components_before_sampling'
