@@ -11,7 +11,11 @@ permissions:
 
 jobs:
   native:
-    name: Native (bounded floating-point Gram matrices)
+    strategy:
+      fail-fast: false
+      matrix:
+        normal: [squeeze, general-log]
+    name: Native (integer square roots, ${{ matrix.normal }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -23,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: 8452d698f12b581ffad82cf9cd8745ea78e46c93
+          ref: 73dbc9c7337f44730c5b9cf5beac2bd960b5b2ee
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -31,6 +35,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - name: Remove specialized normal squeeze (benchmark only)
+        if: matrix.normal == 'general-log'
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("rust/src/traits/samplers/bingham/mod.rs")
+          source = path.read_text()
+          start = source.index("                let t = one().sub(&u)")
+          end = source.index("                if let Some(log_u)", start)
+          source = source[:start] + source[end:]
+          start = source.index("fn normal()")
+          end = source.index("fn normal_bounds(", start)
+          normal = source[start:end].replace("let mut bits = 64;", "let mut bits = 8;").replace("bits += 64;", "bits *= 2;")
+          source = source[:start] + normal + source[end:]
+          path.write_text(source)
+          PY
       - name: Add benchmark-only setup timing
         run: |
           python - <<'PY'
