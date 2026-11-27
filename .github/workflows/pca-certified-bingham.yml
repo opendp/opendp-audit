@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   native:
-    name: Native (integer Gram matrices)
+    name: Native (bounded floating-point Gram matrices)
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: 0262c9e31903fc8262d93fdd357604e9b6f854de
+          ref: 8452d698f12b581ffad82cf9cd8745ea78e46c93
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -37,7 +37,7 @@ jobs:
           from pathlib import Path
           path = Path("rust/src/traits/samplers/bingham/mod.rs")
           source = path.read_text()
-          start = "        let (p, p_den) = integer_matrix(p);"
+          start = "        let certified = approximate_diagonals(&p, &factor)"
           end = "        let lower = g_diagonal.iter().map(|r| &r.lo).min()?.clone();"
           assert source.count(start) == source.count(end) == 1
           source = source.replace(start, "        let started = std::time::Instant::now();\n" + start)
@@ -45,6 +45,9 @@ jobs:
                   if std::env::var_os("OPENDP_PROFILE_BINGHAM").is_some() {
                       eprintln!("PROFILE certificate d={} elapsed_ms={:.3}", factor.len(), started.elapsed().as_secs_f64() * 1000.0);
                   }""")
+          fallback = "        let (g_diagonal, h_diagonal) = certified.unwrap_or_else(|| {"
+          assert source.count(fallback) == 1
+          source = source.replace(fallback, fallback + '\n            if std::env::var_os("OPENDP_PROFILE_BINGHAM").is_some() { eprintln!("PROFILE exact fallback d={}", factor.len()); }')
           path.write_text(source)
           PY
       - name: Test native sampler
