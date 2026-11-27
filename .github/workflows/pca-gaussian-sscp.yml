@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: 15a4cc5defab9f355c365b5d7bc3cb2523f8f1e5
+          ref: d09cc92f2f37ecd37a992f6ce81a6b6d7922e689
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -38,7 +38,7 @@ jobs:
           python -m pytest -v test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py test/extras/test_xTx_numpy.py test/extras/test_linear_regression_adassp.py
       - name: Check out joint moment candidate
         run: |
-          git fetch --no-tags --depth=1 origin 94605710687f814f357c1cff272c18c20df004ef
+          git fetch --no-tags --depth=1 origin 12847133e54895cd2415ceb468add1fef5b83ad7
           git reset --hard FETCH_HEAD
       - name: Test joint moment PCA
         run: |
