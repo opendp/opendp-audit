@@ -1,4 +1,4 @@
-name: Test certified Bingham sampler against pinned OpenDP branch
+name: Test and benchmark certified Bingham sampler
 
 on:
   push:
@@ -11,13 +11,27 @@ permissions:
 
 jobs:
   native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: original
+            ref: 1b67d8e584ea7031d02c0ffd1b933fdd886d8e70
+          - variant: dyadic
+            ref: ee787901f2c2a5e15feb3ac4109fdc80014de927
+    name: Native (${{ matrix.variant }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      OPENDP_TEST_RELEASE: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
     steps:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: 1b67d8e584ea7031d02c0ffd1b933fdd886d8e70
+          ref: ${{ matrix.ref }}
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -25,16 +39,69 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: Format and test native sampler
+      - name: Test native sampler
+        if: matrix.variant == 'dyadic'
         run: |
           cargo fmt --manifest-path rust/Cargo.toml --all
           cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::bingham
       - name: Build generated Python bindings
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
-      - name: Test eigenvector and PCA integration
-        env:
-          OPENDP_TEST_RELEASE: '1'
+      - name: Install Python test dependencies
+        run: python -m pip install -e 'python[scikit-learn]' pytest
+      - name: Benchmark complete sampler invocations
+        shell: bash
         run: |
-          python -m pip install -e 'python[scikit-learn]' pytest
+          lscpu | grep -E 'Model name|CPU\(s\):' || true
+          cat >/tmp/bench_bingham.py <<'PY'
+          import statistics
+          import sys
+          import time
+          import numpy as np
+          from opendp.extras.sklearn._make_eigenvector import _optimal_b, _sample_bingham
+
+          d, spread = map(int, sys.argv[1:])
+          rng = np.random.default_rng(42)
+          q, _ = np.linalg.qr(rng.normal(size=(d, d)))
+          c = (q * np.linspace(0, spread, d)) @ q.T
+          c = (c + c.T) / 2
+
+          def floating_reference():
+              eigenvalues, q = np.linalg.eigh(c - c[0, 0] * np.eye(d))
+              a = eigenvalues[-1] - eigenvalues
+              b = _optimal_b(a, d)
+              while True:
+                  z = rng.normal(size=d) / np.sqrt(b + 2 * a)
+                  u = z / np.linalg.norm(z)
+                  x = np.dot(b + 2 * a, u ** 2) / d
+                  if np.log(rng.random()) <= d / 2 * (np.log(x) + 1 - x):
+                      return q @ u
+
+          for name, sample, n in [
+              ("float-reference", floating_reference, 20),
+              ("certified", lambda: _sample_bingham(c, 1.0), 5),
+          ]:
+              timings = []
+              for _ in range(n):
+                  start = time.perf_counter()
+                  result = np.asarray(sample())
+                  timings.append(1000 * (time.perf_counter() - start))
+                  assert np.isfinite(result).all()
+                  assert abs(np.linalg.norm(result) - 1) < 1e-12
+              print(f"BENCH {name} d={d} spread={spread} n={n} median_ms={statistics.median(timings):.3f} max_ms={max(timings):.3f}", flush=True)
+          PY
+          for d in 2 8 24 64 128; do
+            for spread in 1 1000; do
+              if timeout 120s python /tmp/bench_bingham.py "$d" "$spread"; then
+                :
+              else
+                status=$?
+                if [ "$status" -ne 124 ]; then exit "$status"; fi
+                echo "BENCH timeout d=$d spread=$spread"
+              fi
+            done
+          done
+      - name: Run complete PCA and eigenvector test files
+        if: matrix.variant == 'dyadic'
+        run: |
           cd python
-          python -m pytest -v test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py -k 'private_eigenvector or joint_eigenvector or matrix_eigendecomposition or selects_components_before_sampling'
+          python -m pytest -v test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py
