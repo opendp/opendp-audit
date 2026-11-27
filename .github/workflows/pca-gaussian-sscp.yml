@@ -1,4 +1,4 @@
-name: Test rank-aware PCA and regression
+name: Test specialized PCA and shared regression infrastructure
 
 on:
   push:
@@ -12,19 +12,19 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       OPENDP_TEST_RELEASE: '1'
       OPENBLAS_NUM_THREADS: '1'
       OMP_NUM_THREADS: '1'
       MKL_NUM_THREADS: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: opendp/opendp
-          ref: d09cc92f2f37ecd37a992f6ce81a6b6d7922e689
+          ref: 61e4dc4a836a9df8d52066b3b2e50049c5fcfee2
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
@@ -32,23 +32,45 @@ jobs:
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
       - name: Install dependencies
         run: python -m pip install -e 'python[scikit-learn]' pytest
-      - name: Run PCA, SSCP and linear regression tests
+      - name: Test nuclear metric base
         run: |
           cd python
-          python -m pytest -v test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py test/extras/test_xTx_numpy.py test/extras/test_linear_regression_adassp.py
-      - name: Check out joint moment candidate
+          python -m pytest -v test/extras/test_xTx_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py
+      - name: Check out specialized PCA
         run: |
-          git fetch --no-tags --depth=1 origin 12847133e54895cd2415ceb468add1fef5b83ad7
+          git fetch --no-tags --depth=1 origin c1de1d0af47128d531debc036317f90500363620
           git reset --hard FETCH_HEAD
-      - name: Test joint moment PCA
+      - name: Test specialized PCA
         run: |
           cd python
-          python -m pytest -v test/extras/test_gaussian_pca.py test/extras/test_pca_numpy.py
+          python -m pytest -v test/extras/test_gaussian_pca.py test/extras/test_eigenvalues_numpy.py test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py test/extras/test_count_numpy.py test/extras/test_xTx_numpy.py
+      - name: Check out linear regression
+        run: |
+          git fetch --no-tags --depth=1 origin 85885a2b672d4f165aafbfc9b2f1e3ecc60e4ab3
+          git reset --hard FETCH_HEAD
+      - name: Test linear regression
+        run: |
+          cd python
+          python -m pytest -v test/extras/test_linear_regression_adassp.py
       - name: Check out weighted regression candidate
         run: |
-          git fetch --no-tags --depth=1 origin 97168955d13c0ffede279a6acbf31de10e8d5643
+          git fetch --no-tags --depth=1 origin 0aa06984420a7715a70ca5241fc4c4f34e6618c6
           git reset --hard FETCH_HEAD
       - name: Test weighted regression candidate
         run: |
           cd python
           python -m pytest -v test/extras/test_linear_regression_adassp.py
+      - name: Check out certified Bingham PCA
+        run: |
+          git fetch --no-tags --depth=1 origin d4e89515c59fd3e6d7f558d70a7fa8644106aa05
+          git reset --hard FETCH_HEAD
+      - name: Rebuild with certified Bingham sampler
+        run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
+      - name: Test certified Bingham integration
+        run: |
+          cd python
+          python -m pytest -v test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py
+      - name: Test certified sampler
+        run: |
+          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib bingham
+          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib karney
