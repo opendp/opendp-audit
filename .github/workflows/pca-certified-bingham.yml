@@ -11,15 +11,7 @@ permissions:
 
 jobs:
   native:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - variant: original
-            ref: 1b67d8e584ea7031d02c0ffd1b933fdd886d8e70
-          - variant: dyadic
-            ref: ee787901f2c2a5e15feb3ac4109fdc80014de927
-    name: Native (${{ matrix.variant }})
+    name: Native (integer Gram matrices)
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -31,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: ${{ matrix.ref }}
+          ref: 0262c9e31903fc8262d93fdd357604e9b6f854de
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -39,8 +31,23 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - name: Add benchmark-only setup timing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("rust/src/traits/samplers/bingham/mod.rs")
+          source = path.read_text()
+          start = "        let (p, p_den) = integer_matrix(p);"
+          end = "        let lower = g_diagonal.iter().map(|r| &r.lo).min()?.clone();"
+          assert source.count(start) == source.count(end) == 1
+          source = source.replace(start, "        let started = std::time::Instant::now();\n" + start)
+          source = source.replace(end, end + """
+                  if std::env::var_os("OPENDP_PROFILE_BINGHAM").is_some() {
+                      eprintln!("PROFILE certificate d={} elapsed_ms={:.3}", factor.len(), started.elapsed().as_secs_f64() * 1000.0);
+                  }""")
+          path.write_text(source)
+          PY
       - name: Test native sampler
-        if: matrix.variant == 'dyadic'
         run: |
           cargo fmt --manifest-path rust/Cargo.toml --all
           cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::bingham
@@ -49,6 +56,8 @@ jobs:
       - name: Install Python test dependencies
         run: python -m pip install -e 'python[scikit-learn]' pytest
       - name: Benchmark complete sampler invocations
+        env:
+          OPENDP_PROFILE_BINGHAM: '1'
         shell: bash
         run: |
           lscpu | grep -E 'Model name|CPU\(s\):' || true
@@ -78,7 +87,7 @@ jobs:
 
           for name, sample, n in [
               ("float-reference", floating_reference, 20),
-              ("certified", lambda: _sample_bingham(c, 1.0), 5),
+              ("certified", lambda: _sample_bingham(c, 1.0), 5 if d <= 128 else 3 if d <= 256 else 1),
           ]:
               timings = []
               for _ in range(n):
@@ -89,9 +98,9 @@ jobs:
                   assert abs(np.linalg.norm(result) - 1) < 1e-12
               print(f"BENCH {name} d={d} spread={spread} n={n} median_ms={statistics.median(timings):.3f} max_ms={max(timings):.3f}", flush=True)
           PY
-          for d in 2 8 24 64 128; do
+          for d in 2 8 24 64 128 256 512 1024; do
             for spread in 1 1000; do
-              if timeout 120s python /tmp/bench_bingham.py "$d" "$spread"; then
+              if timeout 180s python /tmp/bench_bingham.py "$d" "$spread"; then
                 :
               else
                 status=$?
@@ -101,7 +110,6 @@ jobs:
             done
           done
       - name: Run complete PCA and eigenvector test files
-        if: matrix.variant == 'dyadic'
         run: |
           cd python
           python -m pytest -v test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py
