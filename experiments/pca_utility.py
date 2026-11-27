@@ -85,8 +85,8 @@ def bingham(rng, C, k, concentration):
     return np.array(basis).T
 
 
-def solver_comparison(rng, d, n, k, loss, gaussian, trials=30):
-    X = clip(rng.normal(size=(n,d))*np.r_[np.ones(k), np.full(d-k,.25)])
+def solver_comparison(rng, d, n, k, loss, gaussian, trials=12, profile=.25):
+    X = clip(rng.normal(size=(n,d))*np.r_[np.ones(k), np.full(d-k,profile)])
     C = X.T@X
     l, Q = np.linalg.eigh(C)
     U = Q[:, -k:]
@@ -113,7 +113,55 @@ def solver_comparison(rng, d, n, k, loss, gaussian, trials=30):
             np.linalg.norm(np.maximum(a,0)-l)/np.linalg.norm(l),
             np.linalg.norm(np.maximum(noisy_l,0)-l)/np.linalg.norm(l),
         ])
-    print("solvers", "rho" if gaussian else "epsilon", d,n,k,loss, np.mean(errors,axis=0))
+    return np.mean(errors, axis=0)
+
+
+def project(l, n):
+    a = np.maximum(l, 0)
+    if a.sum() <= n:
+        return a
+    t = np.max((np.cumsum(a[::-1]) - n) / np.arange(1, len(a)+1))
+    return np.maximum(a-t, 0)
+
+
+def trace_comparison(rng, d, n, k, loss, gaussian, profile, trials=12):
+    X = clip(rng.normal(size=(n,d))*np.r_[np.ones(k), np.full(d-k,profile)])
+    C = X.T @ X
+    l, Q = np.linalg.eigh(C)
+    U = Q[:, -k:]
+    m = d*(d+1)//2
+    errors = []
+    for _ in range(trials):
+        scale = 1/np.sqrt(loss) if gaussian else np.sqrt(2*m)/loss
+        a, V = np.linalg.eigh(C+symmetric_noise(rng,d,scale,gaussian))
+        draw = rng.normal if gaussian else rng.laplace
+        b = np.sort(l+draw(size=d)*(np.sqrt(2/loss) if gaussian else 4/loss))
+        # Compare a separate eigenvalue release using 10% of the budget.
+        hv = np.linalg.eigh(C+symmetric_noise(
+            rng,d,scale/(np.sqrt(.9) if gaussian else .9),gaussian
+        ))[1][:, -k:]
+        hs = np.sort(l+draw(size=d)*(np.sqrt(1/(.1*loss)) if gaussian else 2/(.1*loss)))
+        norm = np.linalg.norm(l)
+        errors.append([
+            np.linalg.norm(np.maximum(a,0)-l)/norm,
+            np.linalg.norm(project(a,n)-l)/norm,
+            np.linalg.norm(np.maximum(b,0)-l)/norm,
+            np.linalg.norm(project(b,n)-l)/norm,
+            np.linalg.norm(project(hs,n)-l)/norm,
+            1-np.linalg.norm(U.T@V[:, -k:], "fro")**2/k,
+            1-np.linalg.norm(U.T@hv, "fro")**2/k,
+        ])
+    return np.mean(errors, axis=0)
+
+
+def configurations():
+    for gaussian in (True, False):
+        for d in (8, 32, 64):
+            for n in (100, 500, 5000):
+                for loss in (.1, 1, 10):
+                    for k in (1, d//4, d//2):
+                        for profile in (.25, .75):
+                            yield gaussian, d, n, k, loss, profile
 
 
 if __name__ == "__main__":
@@ -125,7 +173,11 @@ if __name__ == "__main__":
                 centered_comparison(rng,d,500,offset,1)
         rng = np.random.default_rng(200)
         print("solvers: SSCP/Bingham subspace loss, SSCP/Bingham spectrum error")
-        for gaussian in (True,False):
-            for d in (8,32,64):
-                for k in (1,d//4,d//2):
-                    solver_comparison(rng,d,500,k,1,gaussian)
+        for g,d,n,k,loss,p in configurations():
+            e = solver_comparison(rng,d,n,k,loss,g,profile=p)
+            print("solvers", int(g),d,n,k,loss,p,*e)
+        rng = np.random.default_rng(23)
+        print("trace: raw/projected matrix, raw/projected direct eigenvalues, hybrid spectrum, matrix/hybrid subspace errors")
+        for g,d,n,k,loss,p in configurations():
+            e = trace_comparison(rng,d,n,k,loss,g,p)
+            print("trace", int(g),d,n,k,loss,p,*e)
