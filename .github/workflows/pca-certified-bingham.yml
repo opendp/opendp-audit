@@ -11,7 +11,11 @@ permissions:
 
 jobs:
   native:
-    name: Native (simplified sampler)
+    strategy:
+      fail-fast: false
+      matrix:
+        evaluation: [screened, direct]
+    name: Native (shared norm, ${{ matrix.evaluation }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -23,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: 882429acecd55cf093cb7fbd1b30909d019ba463
+          ref: 65a09504d4c39bc9b5b80c75ffc3459d2008f66c
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -31,6 +35,37 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - name: Benchmark direct evaluation without H (experimental variant)
+        if: matrix.evaluation == 'direct'
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("rust/src/traits/samplers/bingham/mod.rs")
+          source = path.read_text()
+          start = source.index("        let certified = approximate_diagonals")
+          end = source.index("\n    }\n", start)
+          source = source[:start] + """        let certified = (|| {
+                      let p = ApproxMatrix::from_exact(&p)?;
+                      let b = ApproxMatrix::from_exact(&factor)?;
+                      b.transpose().multiply(&p.multiply(&b)?)?.diagonal_bounds()
+                  })().filter(|g| g.iter().all(|r| r.lo > RBig::ZERO));
+                  let g_diagonal = certified.unwrap_or_else(|| {
+                      let (p, p_den) = integer_matrix(&p);
+                      let (b, b_den) = integer_matrix(&factor);
+                      let bt = transpose(&b);
+                      let h_den = &b_den * &b_den;
+                      let g = rationalize(matmul(&bt, &matmul(&p, &b)), &(&p_den * &h_den));
+                      diagonal_bounds(&g)
+                  });
+                  Self::from_bounds(p, factor, g_diagonal, vec![])""" + source[end:]
+          start = source.index("                            let squared: Vec<_>")
+          end = source.index("                            match decision", start)
+          source = source[:start] + """                            let z2 = norm_squared(&z_bounds);
+                                      let projected = v.insert(project());
+                                      let decision = self.decide(&quadratic(&self.precision, projected), &norm_squared(projected), &z2, &log_u, bits);
+          """ + source[end:]
+          path.write_text(source)
+          PY
       - name: Test native sampler
         run: |
           cargo fmt --manifest-path rust/Cargo.toml --all
@@ -69,7 +104,7 @@ jobs:
 
           for name, sample, n in [
               ("float-reference", floating_reference, 20),
-              ("certified", lambda: _sample_bingham(c, 1.0), 5 if d <= 128 else 3 if d <= 256 else 1),
+              ("certified", lambda: _sample_bingham(c, 1.0), 5 if d <= 128 else 3),
           ]:
               timings = []
               for _ in range(n):
