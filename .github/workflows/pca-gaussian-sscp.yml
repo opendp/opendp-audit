@@ -38,7 +38,7 @@ jobs:
           python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py
       - name: Check out shared SSCP infrastructure
         run: |
-          git fetch --no-tags --depth=1 origin 79e81cc77306ee9871c5a2831b1bffab44ade913
+          git fetch --no-tags --depth=1 origin f69a809baef29950c5ff9d7c01b5c651be994951
           git reset --hard FETCH_HEAD
       - name: Test shared SSCP infrastructure and legacy compatibility
         run: |
@@ -46,7 +46,7 @@ jobs:
           python -m pytest -v test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_np_joint_moments.py test/extras/test_sklearn_estimator.py test/extras/test_eigenvalues_numpy.py test/extras/test_eigenvector_numpy.py
       - name: Check out linear regression
         run: |
-          git fetch --no-tags --depth=1 origin a160ddda791cb8d8659808c69139c0a7061563e9
+          git fetch --no-tags --depth=1 origin f1ce70d02e3ca4cf60d5f17c77de81e6c2694927
           git reset --hard FETCH_HEAD
       - name: Test linear regression
         run: |
@@ -76,11 +76,11 @@ jobs:
         run: python -m pip install -e 'python[scikit-learn]' pytest
       - name: Check out shared SSCP infrastructure
         run: |
-          git fetch --no-tags --depth=1 origin 79e81cc77306ee9871c5a2831b1bffab44ade913
+          git fetch --no-tags --depth=1 origin f69a809baef29950c5ff9d7c01b5c651be994951
           git reset --hard FETCH_HEAD
       - name: Check out SSCP-only decomposition2
         run: |
-          git fetch --no-tags --depth=1 origin c0e85d8a8356453c0da9920f8a625c8f09c64489
+          git fetch --no-tags --depth=1 origin e2e68a1dfac6e81eb8599c828ec5108a580ff284
           git reset --hard FETCH_HEAD
       - name: Test SSCP-only decomposition2
         run: |
@@ -88,7 +88,7 @@ jobs:
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_pca_numpy.py test/extras/test_count_numpy.py
       - name: Check out Bingham integration in decomposition2
         run: |
-          git fetch --no-tags --depth=1 origin 5fbfc9b0be7527c5d15e1a8639978333fc84303b
+          git fetch --no-tags --depth=1 origin 0099fe660dacea7a45db7c35ede15059d3c042e5
           git reset --hard FETCH_HEAD
       - name: Test Bingham integration in decomposition2
         run: |
@@ -96,7 +96,7 @@ jobs:
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out scale-based Bingham
         run: |
-          git fetch --no-tags --depth=1 origin f0e0a1b7cb1a18742bf962b88d3a1db5beae117f
+          git fetch --no-tags --depth=1 origin 44a526f727b73c2757e85c0a8fccb1f53cf873b7
           git reset --hard FETCH_HEAD
       - name: Test scale-based Bingham
         run: |
@@ -104,7 +104,7 @@ jobs:
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out unknown-size Bingham
         run: |
-          git fetch --no-tags --depth=1 origin a38dbbd16bddb7b6f0a572da853efe05ce049745
+          git fetch --no-tags --depth=1 origin dba0ad85d3af553290e93e8a32c0e501dedf7305
           git reset --hard FETCH_HEAD
       - name: Test unknown-size Bingham
         run: |
@@ -112,7 +112,7 @@ jobs:
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out certified Bingham
         run: |
-          git fetch --no-tags --depth=1 origin 3972f1a684f0831dcd2885d013ced95fa7f435df
+          git fetch --no-tags --depth=1 origin e48e6ba4f4881783dae1c29249209a675c09f124
           git reset --hard FETCH_HEAD
       - name: Rebuild for certified Bingham
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
