@@ -1,4 +1,4 @@
-name: Test Gaussian SSCP PCA and regression
+name: Test rank-aware PCA and regression
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: 66737e072d56ae2a09e722cc53f45615cd5ad34d
+          ref: 703f396c7ca9d28573a651720fe1624c8726f0d8
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -35,4 +35,4 @@ jobs:
       - name: Run PCA, SSCP and linear regression tests
         run: |
           cd python
-          python -m pytest -v test/extras/test_gaussian_pca.py test/extras/test_pca_numpy.py test/extras/test_xTx_numpy.py test/extras/test_linear_regression_adassp.py
+          python -m pytest -v test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_pca_numpy.py test/extras/test_xTx_numpy.py test/extras/test_linear_regression_adassp.py
