@@ -80,46 +80,46 @@ jobs:
           git reset --hard FETCH_HEAD
       - name: Check out SSCP-only decomposition2
         run: |
-          git fetch --no-tags --depth=1 origin bb2a4296c37dd6f91c6df38fd16597be24f43541
+          git fetch --no-tags --depth=1 origin 47e43e4e826638b8d2acdc8055e16abe5bf5a2fa
           git reset --hard FETCH_HEAD
       - name: Test SSCP-only decomposition2
         run: |
           cd python
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_pca_numpy.py test/extras/test_count_numpy.py
-      - name: Check out PCA consolidation
+      - name: Check out Bingham integration in decomposition2
         run: |
-          git fetch --no-tags --depth=1 origin 8c106c80bbda0576e0787f6a9ca7a0451be967d3
+          git fetch --no-tags --depth=1 origin 944ca9a6463de3d8e261cb962dda47e7fb7aab28
           git reset --hard FETCH_HEAD
-      - name: Test PCA consolidation
+      - name: Test Bingham integration in decomposition2
         run: |
           cd python
-          python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
+          python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out scale-based Bingham
         run: |
-          git fetch --no-tags --depth=1 origin acea49e77498e4a1a9b1b23f3c83611e8c8201d6
+          git fetch --no-tags --depth=1 origin e9b994358a8d727f3311da8c6ba8e5ba5206cd09
           git reset --hard FETCH_HEAD
       - name: Test scale-based Bingham
         run: |
           cd python
-          python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
+          python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out unknown-size Bingham
         run: |
-          git fetch --no-tags --depth=1 origin da79a97913c06d450ec5201ab2983abec3511f21
+          git fetch --no-tags --depth=1 origin 886521ac90395a6ecec065696e39395d7c84c2fa
           git reset --hard FETCH_HEAD
       - name: Test unknown-size Bingham
         run: |
           cd python
-          python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
+          python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out certified Bingham
         run: |
-          git fetch --no-tags --depth=1 origin 86605e2d0b5573587b593edd6823a14b63977ba4
+          git fetch --no-tags --depth=1 origin 93300c6b81dba185f84fa5d1cb81f1c3aa3785ee
           git reset --hard FETCH_HEAD
       - name: Rebuild for certified Bingham
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
       - name: Test certified Bingham
         run: |
           cd python
-          python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
+          python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Test certified sampler
         run: |
           cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib bingham
