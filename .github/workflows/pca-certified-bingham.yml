@@ -51,25 +51,6 @@ jobs:
           source = source[:start] + normal + source[end:]
           path.write_text(source)
           PY
-      - name: Add benchmark-only setup timing
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path("rust/src/traits/samplers/bingham/mod.rs")
-          source = path.read_text()
-          start = "        let certified = approximate_diagonals(&p, &factor)"
-          end = "        let lower = g_diagonal.iter().map(|r| &r.lo).min()?.clone();"
-          assert source.count(start) == source.count(end) == 1
-          source = source.replace(start, "        let started = std::time::Instant::now();\n" + start)
-          source = source.replace(end, end + """
-                  if std::env::var_os("OPENDP_PROFILE_BINGHAM").is_some() {
-                      eprintln!("PROFILE certificate d={} elapsed_ms={:.3}", factor.len(), started.elapsed().as_secs_f64() * 1000.0);
-                  }""")
-          fallback = "        let (g_diagonal, h_diagonal) = certified.unwrap_or_else(|| {"
-          assert source.count(fallback) == 1
-          source = source.replace(fallback, fallback + '\n            if std::env::var_os("OPENDP_PROFILE_BINGHAM").is_some() { eprintln!("PROFILE exact fallback d={}", factor.len()); }')
-          path.write_text(source)
-          PY
       - name: Test native sampler
         run: |
           cargo fmt --manifest-path rust/Cargo.toml --all
@@ -79,8 +60,6 @@ jobs:
       - name: Install Python test dependencies
         run: python -m pip install -e 'python[scikit-learn]' pytest
       - name: Benchmark complete sampler invocations
-        env:
-          OPENDP_PROFILE_BINGHAM: '1'
         shell: bash
         run: |
           lscpu | grep -E 'Model name|CPU\(s\):' || true
