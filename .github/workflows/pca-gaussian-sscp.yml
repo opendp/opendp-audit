@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: opendp/opendp
-          ref: 30ea684d721ae7199327f6a1d1b3fc2535484890
+          ref: 2ba56a6fd845309f462cb832a4e3452f1a873d2b
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -32,13 +32,21 @@ jobs:
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
       - name: Install dependencies
         run: python -m pip install -e 'python[scikit-learn]' pytest
+      - name: Test nuclear-distance refactor with legacy PCA
+        run: |
+          cd python
+          python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py
+      - name: Check out shared SSCP infrastructure
+        run: |
+          git fetch --no-tags --depth=1 origin f09572fa70faec8cc66075cf9495f2f1c1e7d963
+          git reset --hard FETCH_HEAD
       - name: Test shared SSCP infrastructure and legacy compatibility
         run: |
           cd python
           python -m pytest -v test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_sklearn_estimator.py test/extras/test_eigenvalues_numpy.py test/extras/test_eigenvector_numpy.py
       - name: Check out linear regression
         run: |
-          git fetch --no-tags --depth=1 origin b9d685e20a81708c4cf3a5b36792398a916f0cbe
+          git fetch --no-tags --depth=1 origin d3273bae1d0e0d5874743b793aafd7b3f9396908
           git reset --hard FETCH_HEAD
       - name: Test linear regression
         run: |
@@ -56,7 +64,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: opendp/opendp
-          ref: 30ea684d721ae7199327f6a1d1b3fc2535484890
+          ref: 2ba56a6fd845309f462cb832a4e3452f1a873d2b
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -66,9 +74,13 @@ jobs:
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
       - name: Install dependencies
         run: python -m pip install -e 'python[scikit-learn]' pytest
+      - name: Check out shared SSCP infrastructure
+        run: |
+          git fetch --no-tags --depth=1 origin f09572fa70faec8cc66075cf9495f2f1c1e7d963
+          git reset --hard FETCH_HEAD
       - name: Check out SSCP-only decomposition2
         run: |
-          git fetch --no-tags --depth=1 origin 039b9bb96a42fbd90a571a5db194f1bc0fdd3e58
+          git fetch --no-tags --depth=1 origin bb2a4296c37dd6f91c6df38fd16597be24f43541
           git reset --hard FETCH_HEAD
       - name: Test SSCP-only decomposition2
         run: |
@@ -76,25 +88,15 @@ jobs:
           python -m pytest -v test/extras/test_pca2_numpy.py test/extras/test_gaussian_pca.py test/extras/test_pca_numpy.py test/extras/test_count_numpy.py
       - name: Check out PCA consolidation
         run: |
-          git fetch --no-tags --depth=1 origin 45351cbdf544098de1c61c682b9c3f4000b787b9
+          git fetch --no-tags --depth=1 origin 8c106c80bbda0576e0787f6a9ca7a0451be967d3
           git reset --hard FETCH_HEAD
       - name: Test PCA consolidation
         run: |
           cd python
           python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
-      - name: Check out nuclear distance
-        run: |
-          git fetch --no-tags --depth=1 origin 2e3cae49f7448e59ed1fe9f77cebbb109a01b1d5
-          git reset --hard FETCH_HEAD
-      - name: Rebuild for nuclear distance
-        run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
-      - name: Test nuclear distance
-        run: |
-          cd python
-          python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out scale-based Bingham
         run: |
-          git fetch --no-tags --depth=1 origin f362fd3dbc6c4307efcb570aaa123db79d2e7732
+          git fetch --no-tags --depth=1 origin acea49e77498e4a1a9b1b23f3c83611e8c8201d6
           git reset --hard FETCH_HEAD
       - name: Test scale-based Bingham
         run: |
@@ -102,7 +104,7 @@ jobs:
           python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out unknown-size Bingham
         run: |
-          git fetch --no-tags --depth=1 origin 7c6ffed211d29996593dbcadbe4c87dbcd2fad54
+          git fetch --no-tags --depth=1 origin da79a97913c06d450ec5201ab2983abec3511f21
           git reset --hard FETCH_HEAD
       - name: Test unknown-size Bingham
         run: |
@@ -110,7 +112,7 @@ jobs:
           python -m pytest -v test/extras/test_pca_numpy.py test/extras/test_gaussian_pca.py test/extras/test_eigenvector_numpy.py test/extras/test_eigenvalues_numpy.py test/extras/test_xTx_numpy.py test/extras/test_ext_domains_numpy.py test/extras/test_svec_numpy.py test/extras/test_count_numpy.py
       - name: Check out certified Bingham
         run: |
-          git fetch --no-tags --depth=1 origin 39903ef75221ec8a64e59b9c68dae9185ca68e94
+          git fetch --no-tags --depth=1 origin 86605e2d0b5573587b593edd6823a14b63977ba4
           git reset --hard FETCH_HEAD
       - name: Rebuild for certified Bingham
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
