@@ -11,15 +11,32 @@ permissions:
 
 jobs:
   native:
+    name: ${{ matrix.candidate.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate:
+          - name: Measurement
+            ref: d1af2650a48492f126abcae372b9c7b3a285983b
+            tests: python/test/extras/test_np_wishart.py
+          - name: PCA
+            ref: 08aed79e7cbea195318c3ae037810070d1651691
+            tests: python/test/extras/test_np_wishart.py python/test/extras/test_pca2_numpy.py python/test/extras/test_gaussian_pca.py
+          - name: Regression
+            ref: 38db4dfb2eb316295e98ba183259fc25d45b0c92
+            tests: python/test/extras/test_np_wishart.py python/test/extras/test_linear_regression_adassp.py
+    env:
+      OPENDP_LIB_DIR: ${{ github.workspace }}/rust/target/release
+      OPENDP_TEST_RELEASE: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: opendp/opendp
-          ref: 38db4dfb2eb316295e98ba183259fc25d45b0c92
+          ref: ${{ matrix.candidate.ref }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - uses: dtolnay/rust-toolchain@stable
@@ -33,7 +50,9 @@ jobs:
           cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::wishart
       - name: Build Python bindings
         run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
-      - name: Test joint measurement
+      - name: Test joint measurement and estimator
+        env:
+          TEST_FILES: ${{ matrix.candidate.tests }}
         run: |
           python -m pip install -e 'python[scikit-learn]' pytest
-          python -m pytest -q python/test/extras/test_np_wishart.py python/test/extras/test_linear_regression_adassp.py
+          python -m pytest -q $TEST_FILES
