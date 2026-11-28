@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: 08aed79e7cbea195318c3ae037810070d1651691
+          ref: 38db4dfb2eb316295e98ba183259fc25d45b0c92
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -36,4 +36,4 @@ jobs:
       - name: Test joint measurement
         run: |
           python -m pip install -e 'python[scikit-learn]' pytest
-          python -m pytest -q python/test/extras/test_np_wishart.py python/test/extras/test_pca2_numpy.py python/test/extras/test_gaussian_pca.py
+          python -m pytest -q python/test/extras/test_np_wishart.py python/test/extras/test_linear_regression_adassp.py
