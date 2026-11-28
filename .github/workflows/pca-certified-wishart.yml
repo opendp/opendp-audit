@@ -22,7 +22,7 @@ jobs:
             ref: d1af2650a48492f126abcae372b9c7b3a285983b
             tests: python/test/extras/test_np_wishart.py
           - name: PCA
-            ref: 08aed79e7cbea195318c3ae037810070d1651691
+            ref: 0b8d9506f0e75460de0fb3e73bf7bb81118841db
             tests: python/test/extras/test_np_wishart.py python/test/extras/test_pca2_numpy.py python/test/extras/test_gaussian_pca.py
           - name: Regression
             ref: 38db4dfb2eb316295e98ba183259fc25d45b0c92
