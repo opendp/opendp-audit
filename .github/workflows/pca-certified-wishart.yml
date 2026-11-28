@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: opendp/opendp
-          ref: 89a2521edf7573fe24de9d9347af02b1c87260f5
+          ref: d1af2650a48492f126abcae372b9c7b3a285983b
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -25,15 +25,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: Format candidate
-        run: |
-          cargo fmt --manifest-path rust/Cargo.toml --all
-          git diff -- rust/src/traits/samplers rust/src/data/ffi/mod.rs
+      - name: Check formatting
+        run: cargo fmt --manifest-path rust/Cargo.toml --all --check
       - name: Test Karney and Wishart sampling
         run: |
           cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::karney
           cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::wishart
-      - name: Benchmark native sampler
+      - name: Build Python bindings
+        run: cargo build --manifest-path rust/Cargo.toml --release --features untrusted,bindings
+      - name: Test joint measurement
         run: |
-          lscpu | grep -E 'Model name|CPU\(s\):' || true
-          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib benchmark_wishart -- --ignored --nocapture
+          python -m pip install -e 'python[numpy]' pytest
+          python -m pytest -q python/test/extras/test_np_wishart.py
