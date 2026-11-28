@@ -1,0 +1,39 @@
+name: Test certified Wishart sampler
+
+on:
+  push:
+    paths:
+      - '.github/workflows/pca-certified-wishart.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: opendp/opendp
+          ref: 89a2521edf7573fe24de9d9347af02b1c87260f5
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Format candidate
+        run: |
+          cargo fmt --manifest-path rust/Cargo.toml --all
+          git diff -- rust/src/traits/samplers rust/src/data/ffi/mod.rs
+      - name: Test Karney and Wishart sampling
+        run: |
+          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::karney
+          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib traits::samplers::wishart
+      - name: Benchmark native sampler
+        run: |
+          lscpu | grep -E 'Model name|CPU\(s\):' || true
+          cargo test --manifest-path rust/Cargo.toml --release --features untrusted,bindings --lib benchmark_wishart -- --ignored --nocapture
