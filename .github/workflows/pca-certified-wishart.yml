@@ -22,17 +22,20 @@ jobs:
             ref: c1a5467f854c48cd77ec9104e158cac9e16ec789
             tests: python/test/extras/test_ext_domains_numpy.py python/test/extras/test_xTx_numpy.py
           - name: Wishart mechanism
-            ref: 81efc828bbef847450a1ace8c44112ede6e1112e
+            ref: b8f36d369aeba9080bda799305e0826f80407557
             tests: python/test/extras/test_np_wishart.py
           - name: Shared SSCP
-            ref: 265030f15e42b7861fe756aac11d25c0e0751812
-            tests: python/test/extras/test_np_joint_moments.py python/test/extras/test_np_pca_moments.py python/test/extras/test_count_numpy.py python/test/extras/test_xTx_numpy.py python/test/extras/test_svec_numpy.py python/test/extras/test_sklearn_estimator.py
+            ref: 35ac68e888136220f2f9dbbd986a501b9692ab86
+            tests: python/test/extras/test_np_wishart.py python/test/extras/test_np_joint_moments.py python/test/extras/test_np_pca_moments.py python/test/extras/test_count_numpy.py python/test/extras/test_xTx_numpy.py python/test/extras/test_svec_numpy.py python/test/extras/test_sklearn_estimator.py
           - name: PCA
-            ref: 866b63c90a9288f90760713660bcc2cb4df5262a
+            ref: 98f70c605d31d2cba88360bb69b681d65a7a2656
             tests: python/test/extras/test_pca_numpy.py python/test/extras/test_gaussian_pca.py
           - name: Regression
-            ref: d5d98db2ff0c8466d621868be877ca3ad79d9b23
+            ref: a71b806d9a244d5ed9f1df0a6a7c8d9afad2ad25
             tests: python/test/extras/test_linear_regression_adassp.py
+          - name: Combined certified estimators
+            ref: b8f36d369aeba9080bda799305e0826f80407557
+            tests: python/test/extras/test_np_pca_moments.py python/test/extras/test_pca_numpy.py python/test/extras/test_gaussian_pca.py python/test/extras/test_linear_regression_adassp.py
     env:
       OPENDP_LIB_DIR: ${{ github.workspace }}/rust/target/release
       OPENDP_TEST_RELEASE: '1'
@@ -42,6 +45,16 @@ jobs:
           repository: opendp/opendp
           ref: ${{ matrix.candidate.ref }}
           persist-credentials: false
+          fetch-depth: 2
+      - name: Merge sibling estimator branches for integration testing
+        if: matrix.candidate.name == 'Combined certified estimators'
+        env:
+          PCA_REF: 98f70c605d31d2cba88360bb69b681d65a7a2656
+          REGRESSION_REF: a71b806d9a244d5ed9f1df0a6a7c8d9afad2ad25
+        run: |
+          git fetch --depth=2 origin "$PCA_REF" "$REGRESSION_REF"
+          git -c user.name=CI -c user.email=ci@example.invalid merge --no-edit "$PCA_REF"
+          git -c user.name=CI -c user.email=ci@example.invalid merge --no-edit "$REGRESSION_REF"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
